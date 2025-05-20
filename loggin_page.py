@@ -110,6 +110,6 @@ class Ui_LoggingPage(object):
         self.label_wind_title.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\">Войдите или зарегистрируйтесь</p><p align=\"center\">в системе</p></body></html>"))
         self.lineEdit_login.setPlaceholderText(_translate("MainWindow", "Логин"))
         self.lineEdit_password.setPlaceholderText(_translate("MainWindow", "Пароль"))
-        self.pushButton_registrate.setText(_translate("MainWindow", "Зарегистрироваться"))
+        self.pushButton_registrate.setText(_translate("MainWindow", "Регистрация"))
         self.pushButton_enter.setText(_translate("MainWindow", "Войти"))
 
