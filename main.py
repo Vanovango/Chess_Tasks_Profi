@@ -7,10 +7,14 @@ from root_main_page import Ui_RootMainPage
 from user_main_page import Ui_UserMainPage
 from registration_page import Ui_RegistrationPage
 
+from verify_user import Verify
+
 
 class StartApp:
     # =========================== init main variables ===============================
     def __init__(self):
+        self.verify = Verify()
+
         self.logging_page = None
         self.ui_logging_page = None
 
@@ -75,15 +79,26 @@ class StartApp:
     def entering_into_system(self, logging, password):
         print(f"logging - {logging} \npassword - {password}")
 
-        if any(logging == i for i in ['root', 'admin']):
+
+
+        if self.verify.check_user(logging, password) == 'admin_access':
             self.open_root_main()
-        elif any(logging == i for i in ['user', 'Ivan']):
+        elif self.verify.check_user(logging, password):
             self.open_user_main()
         else:
             print('Пользователь не найден')
 
     def registration_new_user(self, logging, password):
-        print(f"logging - {logging}\npassword - {password}")
+        user_data = {
+            'full_name': 'Voytenich',
+            'date_of_birth': '25.03.2003',
+            'logging': logging,
+            'password': password
+        }
+        self.verify.add_new_user(user_data)
+
+        self.registration_page.close()
+        self.logging_page.show()
 
     #=========================== run app ===============================
     def run(self):
