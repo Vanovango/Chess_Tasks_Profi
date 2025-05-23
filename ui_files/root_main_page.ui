@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>621</width>
     <height>600</height>
    </rect>
   </property>
@@ -14,20 +14,86 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QLabel" name="label">
+   <widget class="QLabel" name="label_title">
     <property name="geometry">
      <rect>
-      <x>80</x>
-      <y>70</y>
-      <width>641</width>
-      <height>411</height>
+      <x>130</x>
+      <y>40</y>
+      <width>331</width>
+      <height>281</height>
      </rect>
     </property>
     <property name="text">
-     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:36pt;&quot;&gt;Вы&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:36pt;&quot;&gt;вошли как&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:36pt;&quot;&gt;ROOT&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:24pt;&quot;&gt;Вы&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:24pt;&quot;&gt;вошли как&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:24pt;&quot;&gt;ROOT&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
    </widget>
   </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>621</width>
+     <height>26</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu_tasks">
+    <property name="title">
+     <string>Задачи</string>
+    </property>
+    <addaction name="action_tasks_list"/>
+    <addaction name="action_create_task"/>
+    <addaction name="separator"/>
+    <addaction name="action_import_task"/>
+    <addaction name="action_export_task"/>
+   </widget>
+   <widget class="QMenu" name="menu_users">
+    <property name="title">
+     <string>Участники</string>
+    </property>
+    <addaction name="action_users_list"/>
+    <addaction name="action_create_user"/>
+    <addaction name="separator"/>
+    <addaction name="action_users_statistics"/>
+   </widget>
+   <addaction name="menu_tasks"/>
+   <addaction name="menu_users"/>
+  </widget>
+  <action name="action_tasks_list">
+   <property name="text">
+    <string>Список задач</string>
+   </property>
+  </action>
+  <action name="action_create_task">
+   <property name="text">
+    <string>Создать задачу</string>
+   </property>
+  </action>
+  <action name="action_import_task">
+   <property name="text">
+    <string>Импорт</string>
+   </property>
+  </action>
+  <action name="action_export_task">
+   <property name="text">
+    <string>Экспорт</string>
+   </property>
+  </action>
+  <action name="action_users_list">
+   <property name="text">
+    <string>Список всех</string>
+   </property>
+  </action>
+  <action name="action_create_user">
+   <property name="text">
+    <string>Новый пользователь</string>
+   </property>
+  </action>
+  <action name="action_users_statistics">
+   <property name="text">
+    <string>Статистика</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>700</width>
-    <height>590</height>
+    <width>610</width>
+    <height>647</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,23 +17,26 @@
    <string notr="true">background-color: rgb(0, 0, 0);</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <property name="spacing">
-     <number>25</number>
-    </property>
+   <layout class="QGridLayout" name="gridLayout">
     <property name="leftMargin">
-     <number>30</number>
+     <number>15</number>
     </property>
     <property name="topMargin">
-     <number>20</number>
+     <number>15</number>
     </property>
     <property name="rightMargin">
-     <number>30</number>
+     <number>15</number>
     </property>
     <property name="bottomMargin">
-     <number>20</number>
+     <number>15</number>
     </property>
-    <item>
+    <property name="horizontalSpacing">
+     <number>15</number>
+    </property>
+    <property name="verticalSpacing">
+     <number>10</number>
+    </property>
+    <item row="0" column="0" colspan="3">
      <widget class="QLabel" name="label_title">
       <property name="font">
        <font>
@@ -50,13 +53,56 @@
       </property>
      </widget>
     </item>
-    <item>
+    <item row="4" column="0">
+     <widget class="QLabel" name="label_passwword">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+</string>
+      </property>
+      <property name="text">
+       <string>Пароль</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="label_logging">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+</string>
+      </property>
+      <property name="text">
+       <string>Логин</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
      <widget class="QLineEdit" name="lineEdit_logging">
       <property name="font">
        <font>
         <family>Bahnschrift SemiBold</family>
-        <pointsize>16</pointsize>
+        <pointsize>14</pointsize>
        </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
       </property>
       <property name="styleSheet">
        <string notr="true">color: rgb(255, 255, 255);
@@ -72,17 +118,118 @@ padding: 10px;</string>
        <set>Qt::AlignCenter</set>
       </property>
       <property name="placeholderText">
-       <string>Введите логин</string>
+       <string/>
       </property>
      </widget>
     </item>
-    <item>
+    <item row="2" column="1">
+     <widget class="QLineEdit" name="lineEdit_date_of_birth">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+background-color: rgb(73, 168, 0);
+
+border-color: rgb(255, 255, 255);
+border-radius: 10px;
+border: 1px solid white;
+
+padding: 10px;</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+      <property name="placeholderText">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_date_of_birth">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+</string>
+      </property>
+      <property name="text">
+       <string>Дата рождения</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label_full_name">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+</string>
+      </property>
+      <property name="text">
+       <string>ФИО</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QLineEdit" name="lineEdit_full_name">
+      <property name="font">
+       <font>
+        <family>Bahnschrift SemiBold</family>
+        <pointsize>14</pointsize>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: rgb(255, 255, 255);
+background-color: rgb(73, 168, 0);
+
+border-color: rgb(255, 255, 255);
+border-radius: 10px;
+border: 1px solid white;
+
+padding: 10px;</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+      <property name="placeholderText">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="1">
      <widget class="QLineEdit" name="lineEdit_password">
       <property name="font">
        <font>
         <family>Bahnschrift SemiBold</family>
-        <pointsize>16</pointsize>
+        <pointsize>14</pointsize>
        </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
       </property>
       <property name="styleSheet">
        <string notr="true">color: rgb(255, 255, 255);
@@ -98,11 +245,11 @@ padding: 10px;</string>
        <set>Qt::AlignCenter</set>
       </property>
       <property name="placeholderText">
-       <string>Введите пароль</string>
+       <string/>
       </property>
      </widget>
     </item>
-    <item>
+    <item row="8" column="0" colspan="3">
      <widget class="QPushButton" name="pushButton_reset">
       <property name="font">
        <font>
@@ -132,16 +279,10 @@ background-color: rgb(4, 74, 0);
       </property>
      </widget>
     </item>
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0">
+    <item row="11" column="0" colspan="3">
+     <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="spacing">
-       <number>50</number>
-      </property>
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>0</number>
+       <number>30</number>
       </property>
       <item>
        <widget class="QPushButton" name="pushButton_back">
@@ -150,6 +291,9 @@ background-color: rgb(4, 74, 0);
           <family>Bahnschrift SemiLight</family>
           <pointsize>14</pointsize>
          </font>
+        </property>
+        <property name="cursor">
+         <cursorShape>PointingHandCursor</cursorShape>
         </property>
         <property name="styleSheet">
          <string notr="true">QPushButton {
@@ -179,6 +323,9 @@ background-color: rgb(4, 74, 0);
           <family>Bahnschrift SemiLight</family>
           <pointsize>14</pointsize>
          </font>
+        </property>
+        <property name="cursor">
+         <cursorShape>PointingHandCursor</cursorShape>
         </property>
         <property name="styleSheet">
          <string notr="true">QPushButton {

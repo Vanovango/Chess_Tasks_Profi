@@ -1,5 +1,5 @@
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtWidgets
 
 
 from loggin_page import Ui_LoggingPage
@@ -50,6 +50,7 @@ class StartApp:
         self.ui_root_main_page.setupUi(self.root_main_page)
 
         self.root_main_page.show()
+        self.logging_page.close()
 
     def open_user_main(self):
         self.user_main_page = QtWidgets.QMainWindow()
@@ -57,6 +58,7 @@ class StartApp:
         self.ui_user_main_page.setupUi(self.user_main_page)
 
         self.user_main_page.show()
+        self.logging_page.close()
 
     def open_registration_page(self):
         self.registration_page = QtWidgets.QMainWindow()
@@ -71,15 +73,16 @@ class StartApp:
         )
         self.ui_registration_page.pushButton_registration.clicked.connect(
             lambda: self.registration_new_user(
+                self.ui_registration_page.lineEdit_full_name.text(),
+                self.ui_registration_page.lineEdit_date_of_birth.text(),
                 self.ui_registration_page.lineEdit_logging.text(),
                 self.ui_registration_page.lineEdit_password.text()
             ))
 
     # ======================= logically functions ===========================
     def entering_into_system(self, logging, password):
-        print(f"logging - {logging} \npassword - {password}")
-
-
+        # print(f"logging - {logging} \n"
+        #       f"password - {password}")
 
         if self.verify.check_user(logging, password) == 'admin_access':
             self.open_root_main()
@@ -88,10 +91,15 @@ class StartApp:
         else:
             print('Пользователь не найден')
 
-    def registration_new_user(self, logging, password):
+    def registration_new_user(self, full_name, date_of_birth, logging, password):
+        # print(f"full_name - {full_name} \n"
+        #       f"date_of_birth - {date_of_birth} \n"
+        #       f"logging - {logging} \n"
+        #       f"password - {password}\n")
+
         user_data = {
-            'full_name': 'Voytenich',
-            'date_of_birth': '25.03.2003',
+            'full_name': full_name,
+            'date_of_birth': date_of_birth,
             'logging': logging,
             'password': password
         }

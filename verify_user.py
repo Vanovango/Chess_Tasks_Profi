@@ -2,7 +2,7 @@ import sqlite3
 
 class Verify:
     def __init__(self):
-        self.connect = sqlite3.connect('database.db')
+        self.connect = sqlite3.connect('./database.db')
         self.cursor = self.connect.cursor()
 
         self.cursor.execute("""
@@ -15,12 +15,6 @@ class Verify:
             );
         """)
 
-        # insert data in users list for testing
-        self.cursor.execute("""
-            INSERT INTO users_list(full_name, date_of_birth, logging, password) VALUES
-            ('Тест', '25.03.2003', 'Войт', '123');
-        """)
-
         self.users_list = {
             'full_name': [],
             'date_of_birth': [],
@@ -29,6 +23,8 @@ class Verify:
         }
 
         self.load_data()
+
+        self.connect.close()
 
     def load_data(self):
         data = self.cursor.execute("""
@@ -41,9 +37,7 @@ class Verify:
             self.users_list['logging'].append(user[3])
             self.users_list['password'].append(user[4])
 
-        print(self.users_list)
-
-
+        # print(self.users_list)
 
     def add_new_user(self, user_data):
 
@@ -61,7 +55,7 @@ class Verify:
         print(self.users_list)
 
     def check_user(self, logging, password):
-        if logging == 'admin' and password == 'admin1':
+        if logging == '' and password == '1':
             return 'admin_access'
 
         if logging in self.users_list['logging']:
