@@ -24,8 +24,6 @@ class Verify:
 
         self.load_data()
 
-        self.connect.close()
-
     def load_data(self):
         data = self.cursor.execute("""
             SELECT * FROM users_list
