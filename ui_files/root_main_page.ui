@@ -56,8 +56,16 @@
     <addaction name="separator"/>
     <addaction name="action_users_statistics"/>
    </widget>
+   <widget class="QMenu" name="menu_exit">
+    <property name="title">
+     <string>Выход</string>
+    </property>
+    <addaction name="action_logout"/>
+    <addaction name="action_close_app"/>
+   </widget>
    <addaction name="menu_tasks"/>
    <addaction name="menu_users"/>
+   <addaction name="menu_exit"/>
   </widget>
   <action name="action_tasks_list">
    <property name="text">
@@ -92,6 +100,16 @@
   <action name="action_users_statistics">
    <property name="text">
     <string>Статистика</string>
+   </property>
+  </action>
+  <action name="action_logout">
+   <property name="text">
+    <string>Выйти</string>
+   </property>
+  </action>
+  <action name="action_close_app">
+   <property name="text">
+    <string>Закрыть приложение</string>
    </property>
   </action>
  </widget>

@@ -13,8 +13,9 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 
 class Ui_RootMainPage(QMainWindow):
-    def __init__(self):
+    def __init__(self, app_reference=None):
         super().__init__()
+        self.app = app_reference
 
         self.db = None
 
@@ -34,6 +35,8 @@ class Ui_RootMainPage(QMainWindow):
         self.menu_tasks.setObjectName("menu_tasks")
         self.menu_users = QtWidgets.QMenu(self.menuBar)
         self.menu_users.setObjectName("menu_users")
+        self.menu_exit = QtWidgets.QMenu(self.menuBar)
+        self.menu_exit.setObjectName("menu_exit")
         MainWindow.setMenuBar(self.menuBar)
         self.action_tasks_list = QtWidgets.QAction(MainWindow)
         self.action_tasks_list.setObjectName("action_tasks_list")
@@ -49,6 +52,10 @@ class Ui_RootMainPage(QMainWindow):
         self.action_create_user.setObjectName("action_create_user")
         self.action_users_statistics = QtWidgets.QAction(MainWindow)
         self.action_users_statistics.setObjectName("action_users_statistics")
+        self.action_logout = QtWidgets.QAction(MainWindow)
+        self.action_logout.setObjectName("action_logout")
+        self.action_close_app = QtWidgets.QAction(MainWindow)
+        self.action_close_app.setObjectName("action_close_app")
         self.menu_tasks.addAction(self.action_tasks_list)
         self.menu_tasks.addAction(self.action_create_task)
         self.menu_tasks.addSeparator()
@@ -58,8 +65,11 @@ class Ui_RootMainPage(QMainWindow):
         self.menu_users.addAction(self.action_create_user)
         self.menu_users.addSeparator()
         self.menu_users.addAction(self.action_users_statistics)
+        self.menu_exit.addAction(self.action_logout)
+        self.menu_exit.addAction(self.action_close_app)
         self.menuBar.addAction(self.menu_tasks.menuAction())
         self.menuBar.addAction(self.menu_users.menuAction())
+        self.menuBar.addAction(self.menu_exit.menuAction())
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -69,9 +79,11 @@ class Ui_RootMainPage(QMainWindow):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.label_title.setText(_translate("MainWindow", "<html><head/><body><p align=\"center\"><span style=\" font-size:24pt;\">Вы</span></p><p align=\"center\"><span style=\" font-size:24pt;\">вошли как</span></p><p align=\"center\"><span style=\" font-size:24pt;\">ROOT</span></p></body></html>"))
+        self.label_title.setText(_translate("MainWindow",
+                                            "<html><head/><body><p align=\"center\"><span style=\" font-size:24pt;\">Вы</span></p><p align=\"center\"><span style=\" font-size:24pt;\">вошли как</span></p><p align=\"center\"><span style=\" font-size:24pt;\">ROOT</span></p></body></html>"))
         self.menu_tasks.setTitle(_translate("MainWindow", "Задачи"))
         self.menu_users.setTitle(_translate("MainWindow", "Участники"))
+        self.menu_exit.setTitle(_translate("MainWindow", "Выход"))
         self.action_tasks_list.setText(_translate("MainWindow", "Список задач"))
         self.action_create_task.setText(_translate("MainWindow", "Создать задачу"))
         self.action_import_task.setText(_translate("MainWindow", "Импорт"))
@@ -79,6 +91,8 @@ class Ui_RootMainPage(QMainWindow):
         self.action_users_list.setText(_translate("MainWindow", "Список всех"))
         self.action_create_user.setText(_translate("MainWindow", "Новый пользователь"))
         self.action_users_statistics.setText(_translate("MainWindow", "Статистика"))
+        self.action_logout.setText(_translate("MainWindow", "Выйти"))
+        self.action_close_app.setText(_translate("MainWindow", "Закрыть приложение"))
 
 
     def functions(self):
@@ -95,6 +109,10 @@ class Ui_RootMainPage(QMainWindow):
         self.action_users_list.triggered.connect(self.show_users_list)
         self.action_create_user.triggered.connect(self.create_user)
         self.action_users_statistics.triggered.connect(self.show_statistics)
+
+        # вкладка с параметрами выхода
+        self.action_logout.triggered.connect(self.logout)
+        self.action_close_app.triggered.connect(self.close_app)
 
     # ===================== action triggers functions =========================
     # tasks menu bar
@@ -120,83 +138,81 @@ class Ui_RootMainPage(QMainWindow):
     def show_statistics(self):
         self.label_title.setText('show_statistics')
 
-    #====================== special functions ==========================
+    # exit menu bar
+    def logout(self):
+        if self.app:
+            self.app.logout()
+
+    @staticmethod
+    def close_app(self):
+        sys.exit()
 
 
 class UsersList(QMainWindow):
     def __init__(self, centralwidget):
         super().__init__()
+        from change_data import Ui_ChangeData
 
         self.new_data = None
+        self.model = QStandardItemModel()
+        self.table = QTableView()
+        self.pushbutton_add_person = QPushButton()
+        self.pushbutton_back = QPushButton()
 
         self.centralwidget = centralwidget
 
         self.connection = sqlite3.connect('database.db')
         self.cursor =  self.connection.cursor()
 
+        # открываем окно редактирования по конкретной строке
+        self.edit_dialog = QtWidgets.QDialog()
+        self.ui_edit_dialog = Ui_ChangeData()
+        self.ui_edit_dialog.setupUi(self.edit_dialog)
+
         self.init_ui()
 
     def init_ui(self):
-        self.cursor.execute("SELECT * FROM users_list")
-        rows = self.cursor.fetchall()
-        print(rows)
+        self.update_table()
 
-        self.model = QStandardItemModel()
-        # Установка заголовков
-        headers = ["ID", "ФИО", "Дата рождения", "Логин", "Пароль"]
-        self.model.setHorizontalHeaderLabels(headers)
+        layout = QtWidgets.QVBoxLayout(self.centralwidget)
 
-        # Заполнение модели
-        for row in rows:
-            items = [QStandardItem(str(cell)) for cell in row]
-            self.model.appendRow(items)
-
-        self.table = QTableView()
         self.table.setModel(self.model)
         self.table.setColumnHidden(0, True)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        self.table.doubleClicked.connect(lambda index: self.edit_selected_row(index))
-
         # Устанавливаем layout на centralwidget
-        layout = QtWidgets.QVBoxLayout(self.centralwidget)
         layout.addWidget(self.table)
         self.centralwidget.setLayout(layout)
 
-    def edit_selected_row(self, index):
-        from change_data import Ui_ChangeData
+        self.table.doubleClicked.connect(lambda index: self.edit_selected_row(index))
 
+    def edit_selected_row(self, index):
         row = index.row()
         data = []
         for column in range(self.model.columnCount()):
             item = self.model.item(row, column)
             data.append(item.text())
 
-        # открываем окно редактирования по конкретной строке
-        edit_dialog = QtWidgets.QDialog()
-        ui_edit_dialog = Ui_ChangeData()
-        ui_edit_dialog.setupUi(edit_dialog)
-
-        ui_edit_dialog.fill_areas(data)
-        edit_dialog.show()
+        self.ui_edit_dialog.fill_areas(data)
+        self.edit_dialog.show()
 
         def return_new_data(id):
             self.new_data = {
                 'id': id,
-                'full_name': ui_edit_dialog.lineEdit_full_name.text(),
-                'date_of_birth': ui_edit_dialog.lineEdit_date_of_birth.text(),
-                'logging': ui_edit_dialog.lineEdit_login.text(),
-                'password': ui_edit_dialog.lineEdit_password.text()
+                'full_name': self.ui_edit_dialog.lineEdit_full_name.text(),
+                'date_of_birth': self.ui_edit_dialog.lineEdit_date_of_birth.text(),
+                'logging': self.ui_edit_dialog.lineEdit_login.text(),
+                'password': self.ui_edit_dialog.lineEdit_password.text()
             }
             self.save_new_data()
-            edit_dialog.close()
-
+            self.edit_dialog.close()
 
         def close():
-            edit_dialog.close()
+            self.edit_dialog.close()
 
-        ui_edit_dialog.pushButton_back.clicked.connect(lambda: close())
-        ui_edit_dialog.pushButton_save.clicked.connect(lambda: return_new_data(data[0]))
+        self.ui_edit_dialog.pushButton_back.clicked.connect(lambda: close())
+        self.ui_edit_dialog.pushButton_save.clicked.connect(lambda: return_new_data(data[0]))
+        self.ui_edit_dialog.pushButton_delete.clicked.connect(lambda: self.del_user(data[0]))
 
     def save_new_data(self):
         self.cursor.execute(f"""
@@ -208,12 +224,35 @@ class UsersList(QMainWindow):
             WHERE id = {self.new_data['id']};
         """)
         self.connection.commit()
-        self.update_table()
+
+        self.init_ui()
+
+    def del_user(self, id):
+        self.cursor.execute("DELETE FROM users_list WHERE id = ?", (id,))
+        self.connection.commit()
+
+        self.edit_dialog.close()
+
+        self.init_ui()
 
     def update_table(self):
-        new_data = list(i for i in self.new_data.values())
-        print(new_data)
+        self.model.clear()
 
-        for column, value in enumerate(new_data[1:]):
-            item = QStandardItem(str(value))
-            self.model.setItem(int(new_data[0]) - 1, column + 1, item)
+        self.cursor.execute("SELECT * FROM users_list")
+        rows = self.cursor.fetchall()
+        print(rows)
+
+        # Установка заголовков
+        headers = ["ID", "ФИО", "Дата рождения", "Логин", "Пароль"]
+        self.model.setHorizontalHeaderLabels(headers)
+
+        # Заполнение модели
+        for row in rows:
+            items = [QStandardItem(str(cell)) for cell in row]
+            self.model.appendRow(items)
+
+
+
+class CreateTask(QMainWindow):
+    def __init__(self):
+        super().__init__()

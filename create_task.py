@@ -41,6 +41,7 @@ def save_to_db(name="Без названия"):
     cursor.execute("INSERT INTO tasks (name, walls) VALUES (?, ?)", (name, walls_json))
     conn.commit()
     conn.close()
+    print('Task added to database')
 
 def load_latest_from_db():
     global walls

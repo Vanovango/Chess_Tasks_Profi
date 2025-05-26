@@ -46,11 +46,15 @@ class StartApp:
 
     def open_root_main(self):
         self.root_main_page = QtWidgets.QMainWindow()
-        self.ui_root_main_page = Ui_RootMainPage()
+        self.ui_root_main_page = Ui_RootMainPage(self)  # передаём ссылку на StartApp
         self.ui_root_main_page.setupUi(self.root_main_page)
 
         self.root_main_page.show()
         self.logging_page.close()
+
+    def logout(self):
+        self.logging_page.show()
+        self.root_main_page.close()
 
     def open_user_main(self):
         self.user_main_page = QtWidgets.QMainWindow()
