@@ -1,170 +1,178 @@
 import pygame
 import json
 import sqlite3
-import os
 
-# Настройки
-CELL_SIZE = 65
-MARGIN = 50
-GRID_SIZE = 8
-SCREEN_WIDTH = CELL_SIZE * GRID_SIZE + 2 * MARGIN
-SCREEN_HEIGHT = CELL_SIZE * GRID_SIZE + 2 * MARGIN + 140
 
-pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Шахматные заграждения")
-font = pygame.font.SysFont(None, 24)
+class CreateTaskForm:
+    def __init__(self, task_id=None, theme=None, name=None, complexity=None, walls=None):
+        complexity_variants = {
+            'Легко': (110, 50, 6),
+            'Средне': (90, 50, 8),
+            'Сложно': (70, 50, 10),
+            'Невозможно': (45, 50, 16)
+        }
 
-# Стены
-walls = {}
+        self.task_id = task_id
+        self.theme = theme
+        self.name = name
+        self.complexity = complexity
+        self.walls = walls or {}
 
-# DB
-DB_FILE = "database.db"
+        self.CELL_SIZE, self.MARGIN, self.GRID_SIZE = complexity_variants[complexity]
+        self.SCREEN_WIDTH = self.CELL_SIZE * self.GRID_SIZE + 2 * self.MARGIN
+        self.SCREEN_HEIGHT = self.CELL_SIZE * self.GRID_SIZE + 2 * self.MARGIN + 140
+        self.DB_FILE = "database.db"
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        walls TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
+        pygame.init()
 
-def save_to_db(name="Без названия"):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    walls_json = json.dumps(list(walls.keys()))
-    cursor.execute("INSERT INTO tasks (name, walls) VALUES (?, ?)", (name, walls_json))
-    conn.commit()
-    conn.close()
-    print('Task added to database')
+        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
 
-def load_latest_from_db():
-    global walls
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT walls FROM tasks ORDER BY id DESC LIMIT 1")
-    result = cursor.fetchone()
-    conn.close()
-    if result:
-        loaded = json.loads(result[0])
-        walls = {tuple(w): True for w in loaded}
+        if self.task_id is None:
+            pygame.display.set_caption("Новая задача")
+        else:
+            pygame.display.set_caption(f"Редактирование: {self.name}")
 
-# Графика
-def draw_grid():
-    for i in range(GRID_SIZE + 1):
-        pygame.draw.line(screen, (0, 0, 0),
-                         (MARGIN + i * CELL_SIZE, MARGIN),
-                         (MARGIN + i * CELL_SIZE, MARGIN + GRID_SIZE * CELL_SIZE))
-        pygame.draw.line(screen, (0, 0, 0),
-                         (MARGIN, MARGIN + i * CELL_SIZE),
-                         (MARGIN + GRID_SIZE * CELL_SIZE, MARGIN + i * CELL_SIZE))
+        self.font = pygame.font.SysFont(None, 24)
+        self.buttons = {}
 
-def draw_walls():
-    for (x1, y1, x2, y2) in walls:
-        if x1 == x2:
-            x = MARGIN + x1 * CELL_SIZE
-            y1 = MARGIN + y1 * CELL_SIZE
-            y2 = MARGIN + y2 * CELL_SIZE
-            pygame.draw.line(screen, (255, 0, 0), (x, y1), (x, y2), 5)
-        elif y1 == y2:
-            y = MARGIN + y1 * CELL_SIZE
-            x1 = MARGIN + x1 * CELL_SIZE
-            x2 = MARGIN + x2 * CELL_SIZE
-            pygame.draw.line(screen, (255, 0, 0), (x1, y), (x2, y), 5)
+    def save_to_db(self):
+        conn = sqlite3.connect(self.DB_FILE)
+        cursor = conn.cursor()
+        walls_json = json.dumps(list(self.walls.keys()))
+        cursor.execute("INSERT INTO tasks (theme, name, complexity, walls) VALUES (?, ?, ?, ?)",
+                       (self.theme, self.name, self.complexity, walls_json))
+        conn.commit()
+        conn.close()
+        print('Task added to database')
 
-def get_line(pos):
-    x, y = pos
-    x -= MARGIN
-    y -= MARGIN
-    if x < 0 or y < 0 or x > GRID_SIZE * CELL_SIZE or y > GRID_SIZE * CELL_SIZE:
+    def change_data(self):
+        conn = sqlite3.connect(self.DB_FILE)
+        cursor = conn.cursor()
+        walls_json = json.dumps(list(self.walls.keys()))
+        cursor.execute("UPDATE tasks SET walls = ? WHERE id = ?", (walls_json, self.task_id))
+        conn.commit()
+        conn.close()
+        print('Task updated in database')
+
+    def delete_from_db(self):
+        conn = sqlite3.connect(self.DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tasks WHERE id = ?", (self.task_id,))
+        conn.commit()
+        conn.close()
+        print("Task deleted from database")
+
+    def draw_grid(self):
+        for i in range(self.GRID_SIZE + 1):
+            pygame.draw.line(self.screen, (0, 0, 0),
+                             (self.MARGIN + i * self.CELL_SIZE, self.MARGIN),
+                             (self.MARGIN + i * self.CELL_SIZE, self.MARGIN + self.GRID_SIZE * self.CELL_SIZE))
+            pygame.draw.line(self.screen, (0, 0, 0),
+                             (self.MARGIN, self.MARGIN + i * self.CELL_SIZE),
+                             (self.MARGIN + self.GRID_SIZE * self.CELL_SIZE, self.MARGIN + i * self.CELL_SIZE))
+
+    def draw_walls(self):
+        for (x1, y1, x2, y2) in self.walls:
+            if x1 == x2:
+                x = self.MARGIN + x1 * self.CELL_SIZE
+                y1 = self.MARGIN + y1 * self.CELL_SIZE
+                y2 = self.MARGIN + y2 * self.CELL_SIZE
+                pygame.draw.line(self.screen, (255, 0, 0), (x, y1), (x, y2), 5)
+            elif y1 == y2:
+                y = self.MARGIN + y1 * self.CELL_SIZE
+                x1 = self.MARGIN + x1 * self.CELL_SIZE
+                x2 = self.MARGIN + x2 * self.CELL_SIZE
+                pygame.draw.line(self.screen, (255, 0, 0), (x1, y), (x2, y), 5)
+
+    def get_line(self, pos):
+        x, y = pos
+        x -= self.MARGIN
+        y -= self.MARGIN
+        if x < 0 or y < 0 or x > self.GRID_SIZE * self.CELL_SIZE or y > self.GRID_SIZE * self.CELL_SIZE:
+            return None
+        col = x // self.CELL_SIZE
+        row = y // self.CELL_SIZE
+        dx = x % self.CELL_SIZE
+        dy = y % self.CELL_SIZE
+        if dx < 10 and col > 0:
+            return (col, row, col, row + 1)
+        if dx > self.CELL_SIZE - 10 and col < self.GRID_SIZE:
+            return (col + 1, row, col + 1, row + 1)
+        if dy < 10 and row > 0:
+            return (col, row, col + 1, row)
+        if dy > self.CELL_SIZE - 10 and row < self.GRID_SIZE:
+            return (col, row + 1, col + 1, row + 1)
         return None
-    col = x // CELL_SIZE
-    row = y // CELL_SIZE
-    dx = x % CELL_SIZE
-    dy = y % CELL_SIZE
-    if dx < 10 and col > 0:
-        return (col, row, col, row + 1)
-    if dx > CELL_SIZE - 10 and col < GRID_SIZE:
-        return (col + 1, row, col + 1, row + 1)
-    if dy < 10 and row > 0:
-        return (col, row, col + 1, row)
-    if dy > CELL_SIZE - 10 and row < GRID_SIZE:
-        return (col, row + 1, col + 1, row + 1)
-    return None
 
-def draw_ui():
-    buttons = {
-        "reset": pygame.Rect(50, SCREEN_HEIGHT - 80, 120, 40),
-        "save_file": pygame.Rect(200, SCREEN_HEIGHT - 80, 120, 40),
-        "save_db": pygame.Rect(350, SCREEN_HEIGHT - 80, 140, 40),
-        "load_db": pygame.Rect(510, SCREEN_HEIGHT - 80, 140, 40)
-    }
+    def draw_ui(self):
+        self.buttons = {
+            "reset": pygame.Rect(50, self.SCREEN_HEIGHT - 80, 120, 40),
+            "save_db": pygame.Rect(200, self.SCREEN_HEIGHT - 80, 140, 40),
+        }
 
-    pygame.draw.rect(screen, (180, 180, 180), buttons["reset"])
-    pygame.draw.rect(screen, (180, 180, 180), buttons["save_file"])
-    pygame.draw.rect(screen, (180, 180, 180), buttons["save_db"])
-    pygame.draw.rect(screen, (180, 180, 180), buttons["load_db"])
+        if self.task_id is not None:
+            self.buttons["delete_task"] = pygame.Rect(370, self.SCREEN_HEIGHT - 80, 160, 40)
 
-    screen.blit(font.render("Сброс", True, (0, 0, 0)), (85, SCREEN_HEIGHT - 68))
-    screen.blit(font.render("Сохранить файл", True, (0, 0, 0)), (210, SCREEN_HEIGHT - 68))
-    screen.blit(font.render("Сохранить в БД", True, (0, 0, 0)), (360, SCREEN_HEIGHT - 68))
-    screen.blit(font.render("Загрузить из БД", True, (0, 0, 0)), (520, SCREEN_HEIGHT - 68))
+        for key, rect in self.buttons.items():
+            pygame.draw.rect(self.screen, (180, 180, 180), rect)
 
-    tips = [
-        "ЛКМ — поставить стену",
-        "ПКМ — удалить стену",
-        "Сброс — очистка поля",
-        "Сохранить — записать в файл или БД"
-    ]
-    for i, tip in enumerate(tips):
-        screen.blit(font.render(tip, True, (0, 0, 255)), (50, SCREEN_HEIGHT - 120 + i * 20))
+        self.screen.blit(self.font.render("Сброс", True, (0, 0, 0)),
+                         (85, self.SCREEN_HEIGHT - 68))
+        self.screen.blit(self.font.render("Сохранить", True, (0, 0, 0)),
+                         (230, self.SCREEN_HEIGHT - 68))
 
-    return buttons
+        if self.task_id is not None:
+            self.screen.blit(self.font.render("Удалить задачу", True, (0, 0, 0)),
+                             (390, self.SCREEN_HEIGHT - 68))
 
-# Сохранение в файл (опционально)
-def save_to_file():
-    with open("walls_state.pkl", "wb") as f:
-        import pickle
-        pickle.dump(walls, f)
+        tips = [
+            "ЛКМ — поставить стену",
+            "ПКМ — удалить стену",
+            "Сброс — очистка поля",
+        ]
+        for i, tip in enumerate(tips):
+            self.screen.blit(self.font.render(tip, True, (0, 0, 255)),
+                             (self.SCREEN_WIDTH - 200, self.SCREEN_HEIGHT - 100 + i * 20))
 
-# Основной цикл
-def main():
-    init_db()
-    running = True
-    while running:
-        screen.fill((255, 255, 255))
-        draw_grid()
-        draw_walls()
-        buttons = draw_ui()
-        pygame.display.flip()
+    def run(self):
+        running = True
+        while running:
+            self.screen.fill((255, 255, 255))
+            self.draw_grid()
+            self.draw_walls()
+            self.draw_ui()
+            pygame.display.flip()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.buttons["reset"].collidepoint(event.pos):
+                        self.walls.clear()
+                    elif self.buttons["save_db"].collidepoint(event.pos):
+                        if self.task_id is None:
+                            self.save_to_db()
+                        else:
+                            self.change_data()
+                        running = False
+                    elif "delete_task" in self.buttons and self.buttons["delete_task"].collidepoint(event.pos):
+                        self.delete_from_db()
+                        running = False
+                    else:
+                        line = self.get_line(event.pos)
+                        if line:
+                            if event.button == 1:
+                                self.walls[line] = True
+                            elif event.button == 3:
+                                self.walls.pop(line, None)
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if buttons["reset"].collidepoint(event.pos):
-                    walls.clear()
-                elif buttons["save_file"].collidepoint(event.pos):
-                    save_to_file()
-                elif buttons["save_db"].collidepoint(event.pos):
-                    save_to_db("Новая задача")
-                elif buttons["load_db"].collidepoint(event.pos):
-                    load_latest_from_db()
-                else:
-                    line = get_line(event.pos)
-                    if line:
-                        if event.button == 1:
-                            walls[line] = True
-                        elif event.button == 3:
-                            walls.pop(line, None)
+        pygame.quit()
 
-    pygame.quit()
 
-if __name__ == "__main__":
-    main()
+# Обёртка для запуска с PyQt5
+class CreateTaskFormWrapper:
+    def __init__(self, task_id, theme, name, complexity, walls):
+        self.form = CreateTaskForm(task_id, theme, name, complexity, walls)
+
+    def run(self):
+        self.form.run()

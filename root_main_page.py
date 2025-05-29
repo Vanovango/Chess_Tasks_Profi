@@ -1,170 +1,213 @@
 import sqlite3
-
-from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
+import json
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QTableView, QDialog, QVBoxLayout,
-    QLineEdit, QPushButton, QMessageBox, QAbstractItemView
+    QApplication, QMainWindow, QTableView, QVBoxLayout,
+    QMessageBox, QWidget, QAbstractItemView
 )
-from PyQt5.QtSql import QSqlDatabase, QSqlTableModel
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtCore import Qt
 
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from new_task_settings import Ui_NewTaskSettings
+from change_data import Ui_ChangeData
+from create_task import CreateTaskForm
 
 
 class Ui_RootMainPage(QMainWindow):
     def __init__(self, app_reference=None):
         super().__init__()
         self.app = app_reference
-
         self.db = None
+
+        self.new_task_settings = QtWidgets.QMainWindow()
+        self.ui_new_task_settings = Ui_NewTaskSettings()
+        self.ui_new_task_settings.setupUi(self.new_task_settings)
+
+        self.current_widget = None
+        self.content_layout = None
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(621, 600)
+
         self.centralwidget = QtWidgets.QWidget(MainWindow)
-        self.centralwidget.setObjectName("centralwidget")
-        self.label_title = QtWidgets.QLabel(self.centralwidget)
-        self.label_title.setGeometry(QtCore.QRect(130, 40, 331, 281))
-        self.label_title.setObjectName("label_title")
+        self.main_layout = QVBoxLayout(self.centralwidget)
+
+        self.label_title = QtWidgets.QLabel()
+        self.label_title.setAlignment(Qt.AlignCenter)
+        self.label_title.setText("<h2>Вы вошли как ROOT</h2>")
+        self.main_layout.addWidget(self.label_title)
+
+        self.content_container = QWidget()
+        self.content_layout = QVBoxLayout(self.content_container)
+        self.main_layout.addWidget(self.content_container)
+
         MainWindow.setCentralWidget(self.centralwidget)
+
         self.menuBar = QtWidgets.QMenuBar(MainWindow)
         self.menuBar.setGeometry(QtCore.QRect(0, 0, 621, 26))
-        self.menuBar.setObjectName("menuBar")
-        self.menu_tasks = QtWidgets.QMenu(self.menuBar)
-        self.menu_tasks.setObjectName("menu_tasks")
-        self.menu_users = QtWidgets.QMenu(self.menuBar)
-        self.menu_users.setObjectName("menu_users")
-        self.menu_exit = QtWidgets.QMenu(self.menuBar)
-        self.menu_exit.setObjectName("menu_exit")
         MainWindow.setMenuBar(self.menuBar)
-        self.action_tasks_list = QtWidgets.QAction(MainWindow)
-        self.action_tasks_list.setObjectName("action_tasks_list")
-        self.action_create_task = QtWidgets.QAction(MainWindow)
-        self.action_create_task.setObjectName("action_create_task")
-        self.action_import_task = QtWidgets.QAction(MainWindow)
-        self.action_import_task.setObjectName("action_import_task")
-        self.action_export_task = QtWidgets.QAction(MainWindow)
-        self.action_export_task.setObjectName("action_export_task")
-        self.action_users_list = QtWidgets.QAction(MainWindow)
-        self.action_users_list.setObjectName("action_users_list")
-        self.action_create_user = QtWidgets.QAction(MainWindow)
-        self.action_create_user.setObjectName("action_create_user")
-        self.action_users_statistics = QtWidgets.QAction(MainWindow)
-        self.action_users_statistics.setObjectName("action_users_statistics")
-        self.action_logout = QtWidgets.QAction(MainWindow)
-        self.action_logout.setObjectName("action_logout")
-        self.action_close_app = QtWidgets.QAction(MainWindow)
-        self.action_close_app.setObjectName("action_close_app")
-        self.menu_tasks.addAction(self.action_tasks_list)
-        self.menu_tasks.addAction(self.action_create_task)
-        self.menu_tasks.addSeparator()
-        self.menu_tasks.addAction(self.action_import_task)
-        self.menu_tasks.addAction(self.action_export_task)
-        self.menu_users.addAction(self.action_users_list)
-        self.menu_users.addAction(self.action_create_user)
-        self.menu_users.addSeparator()
-        self.menu_users.addAction(self.action_users_statistics)
-        self.menu_exit.addAction(self.action_logout)
-        self.menu_exit.addAction(self.action_close_app)
-        self.menuBar.addAction(self.menu_tasks.menuAction())
-        self.menuBar.addAction(self.menu_users.menuAction())
-        self.menuBar.addAction(self.menu_exit.menuAction())
 
-        self.retranslateUi(MainWindow)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        self.menu_tasks = QtWidgets.QMenu("Задачи", self.menuBar)
+        self.menu_users = QtWidgets.QMenu("Участники", self.menuBar)
+        self.menu_exit = QtWidgets.QMenu("Выход", self.menuBar)
+
+        self.action_tasks_list = QtWidgets.QAction("Список задач", self)
+        self.action_create_task = QtWidgets.QAction("Создать задачу", self)
+        self.action_import_task = QtWidgets.QAction("Импорт", self)
+        self.action_export_task = QtWidgets.QAction("Экспорт", self)
+
+        self.action_users_list = QtWidgets.QAction("Список всех", self)
+        self.action_create_user = QtWidgets.QAction("Новый пользователь", self)
+        self.action_users_statistics = QtWidgets.QAction("Статистика", self)
+
+        self.action_logout = QtWidgets.QAction("Выйти", self)
+        self.action_close_app = QtWidgets.QAction("Закрыть приложение", self)
+
+        self.menu_tasks.addActions([
+            self.action_tasks_list,
+            self.action_create_task,
+            self.action_import_task,
+            self.action_export_task
+        ])
+        self.menu_users.addActions([
+            self.action_users_list,
+            self.action_create_user,
+            self.action_users_statistics
+        ])
+        self.menu_exit.addActions([
+            self.action_logout,
+            self.action_close_app
+        ])
+
+        self.menuBar.addMenu(self.menu_tasks)
+        self.menuBar.addMenu(self.menu_users)
+        self.menuBar.addMenu(self.menu_exit)
 
         self.functions()
 
-    def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.label_title.setText(_translate("MainWindow",
-                                            "<html><head/><body><p align=\"center\"><span style=\" font-size:24pt;\">Вы</span></p><p align=\"center\"><span style=\" font-size:24pt;\">вошли как</span></p><p align=\"center\"><span style=\" font-size:24pt;\">ROOT</span></p></body></html>"))
-        self.menu_tasks.setTitle(_translate("MainWindow", "Задачи"))
-        self.menu_users.setTitle(_translate("MainWindow", "Участники"))
-        self.menu_exit.setTitle(_translate("MainWindow", "Выход"))
-        self.action_tasks_list.setText(_translate("MainWindow", "Список задач"))
-        self.action_create_task.setText(_translate("MainWindow", "Создать задачу"))
-        self.action_import_task.setText(_translate("MainWindow", "Импорт"))
-        self.action_export_task.setText(_translate("MainWindow", "Экспорт"))
-        self.action_users_list.setText(_translate("MainWindow", "Список всех"))
-        self.action_create_user.setText(_translate("MainWindow", "Новый пользователь"))
-        self.action_users_statistics.setText(_translate("MainWindow", "Статистика"))
-        self.action_logout.setText(_translate("MainWindow", "Выйти"))
-        self.action_close_app.setText(_translate("MainWindow", "Закрыть приложение"))
-
-
     def functions(self):
-        # сразу показываем список задач
-        self.show_tasks_list()
-
-        # вкладка с параметрами задач
         self.action_tasks_list.triggered.connect(self.show_tasks_list)
         self.action_create_task.triggered.connect(self.crate_task)
-        self.action_import_task.triggered.connect(self.import_task)
-        self.action_export_task.triggered.connect(self.export_task)
+        self.action_import_task.triggered.connect(lambda: self.label_title.setText("import_task"))
+        self.action_export_task.triggered.connect(lambda: self.label_title.setText("export_task"))
 
-        # вкладка с параметрами пользователей
         self.action_users_list.triggered.connect(self.show_users_list)
-        self.action_create_user.triggered.connect(self.create_user)
-        self.action_users_statistics.triggered.connect(self.show_statistics)
+        self.action_create_user.triggered.connect(lambda: self.label_title.setText("create_user"))
+        self.action_users_statistics.triggered.connect(lambda: self.label_title.setText("show_statistics"))
 
-        # вкладка с параметрами выхода
         self.action_logout.triggered.connect(self.logout)
         self.action_close_app.triggered.connect(self.close_app)
 
-    # ===================== action triggers functions =========================
-    # tasks menu bar
+        self.show_tasks_list()
+
+    def set_content_widget(self, widget):
+        if self.current_widget:
+            self.content_layout.removeWidget(self.current_widget)
+            self.current_widget.setParent(None)
+        self.current_widget = widget
+        self.content_layout.addWidget(widget)
+
     def show_tasks_list(self):
-        self.label_title.setText('show_tasks_list')
+        table_widget = CreateTaskTable()
+        table_widget.task_double_clicked.connect(self.edit_existing_task)
+        self.set_content_widget(table_widget)
+
 
     def crate_task(self):
-        self.label_title.setText('crate_task')
+        self.new_task_settings.show()
 
-    def import_task(self):
-        self.label_title.setText('import_task')
+        self.ui_new_task_settings.pushButton_back.clicked.connect(lambda: self.new_task_settings.close())
+        self.ui_new_task_settings.pushButton_create.clicked.connect(lambda: self.open_create_form(
+            None,
+            self.ui_new_task_settings.lineEdit_theme.text(),
+            self.ui_new_task_settings.lineEdit_name.text(),
+            self.ui_new_task_settings.comboBox_complexity.currentText()
+        ))
 
-    def export_task(self):
-        self.label_title.setText('export_task')
+    def open_create_form(self, task_id, theme, name, complexity):
+        self.new_task_settings.close()
+        new_task_form = CreateTaskForm(task_id, theme, name, complexity)
+        new_task_form.run()
 
-    # tasks menu bar
+    def edit_existing_task(self, task_id):
+        conn = sqlite3.connect("database.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT theme, name, complexity, walls FROM tasks WHERE id = ?", (task_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            theme, name, complexity, walls_json = row
+            loaded_walls = json.loads(walls_json)
+
+            # Передаем ID задачи в форму, чтобы она могла обновить её, а не создавать новую
+            task_form = CreateTaskForm(task_id, theme, name, complexity)
+            task_form.walls = {tuple(w): True for w in loaded_walls}
+            task_form.run()
+
     def show_users_list(self):
-        UsersList(self.centralwidget)
+        table_widget = UsersListTable()
+        self.set_content_widget(table_widget)
 
-    def create_user(self):
-        self.label_title.setText('create_user')
-
-    def show_statistics(self):
-        self.label_title.setText('show_statistics')
-
-    # exit menu bar
     def logout(self):
         if self.app:
             self.app.logout()
 
     @staticmethod
-    def close_app(self):
+    def close_app():
         sys.exit()
 
 
-class UsersList(QMainWindow):
-    def __init__(self, centralwidget):
-        super().__init__()
-        from change_data import Ui_ChangeData
+from PyQt5.QtCore import pyqtSignal
 
-        self.new_data = None
+
+class CreateTaskTable(QWidget):
+    task_double_clicked = pyqtSignal(int)  # ID задачи
+
+    def __init__(self):
+        super().__init__()
         self.model = QStandardItemModel()
         self.table = QTableView()
-        self.pushbutton_add_person = QPushButton()
-        self.pushbutton_back = QPushButton()
-
-        self.centralwidget = centralwidget
-
         self.connection = sqlite3.connect('database.db')
-        self.cursor =  self.connection.cursor()
+        self.cursor = self.connection.cursor()
 
-        # открываем окно редактирования по конкретной строке
+        self.init_ui()
+
+    def init_ui(self):
+        self.update_table()
+        layout = QVBoxLayout(self)
+        self.table.setModel(self.model)
+        self.table.setColumnHidden(0, True)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        layout.addWidget(self.table)
+        self.table.doubleClicked.connect(self.row_double_clicked)
+
+    def update_table(self):
+        self.model.clear()
+        self.cursor.execute("SELECT id, theme, name, complexity FROM tasks")
+        rows = self.cursor.fetchall()
+        headers = ["ID", "Тема", "Название", "Сложность"]
+        self.model.setHorizontalHeaderLabels(headers)
+        for row in rows:
+            items = [QStandardItem(str(cell)) for cell in row]
+            self.model.appendRow(items)
+
+    def row_double_clicked(self, index):
+        row = index.row()
+        task_id = int(self.model.item(row, 0).text())
+        self.task_double_clicked.emit(task_id)
+
+
+class UsersListTable(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.model = QStandardItemModel()
+        self.table = QTableView()
+        self.connection = sqlite3.connect('database.db')
+        self.cursor = self.connection.cursor()
+
         self.edit_dialog = QtWidgets.QDialog()
         self.ui_edit_dialog = Ui_ChangeData()
         self.ui_edit_dialog.setupUi(self.edit_dialog)
@@ -173,86 +216,55 @@ class UsersList(QMainWindow):
 
     def init_ui(self):
         self.update_table()
-
-        layout = QtWidgets.QVBoxLayout(self.centralwidget)
-
+        layout = QVBoxLayout(self)
         self.table.setModel(self.model)
         self.table.setColumnHidden(0, True)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
-        # Устанавливаем layout на centralwidget
         layout.addWidget(self.table)
-        self.centralwidget.setLayout(layout)
-
-        self.table.doubleClicked.connect(lambda index: self.edit_selected_row(index))
-
-    def edit_selected_row(self, index):
-        row = index.row()
-        data = []
-        for column in range(self.model.columnCount()):
-            item = self.model.item(row, column)
-            data.append(item.text())
-
-        self.ui_edit_dialog.fill_areas(data)
-        self.edit_dialog.show()
-
-        def return_new_data(id):
-            self.new_data = {
-                'id': id,
-                'full_name': self.ui_edit_dialog.lineEdit_full_name.text(),
-                'date_of_birth': self.ui_edit_dialog.lineEdit_date_of_birth.text(),
-                'logging': self.ui_edit_dialog.lineEdit_login.text(),
-                'password': self.ui_edit_dialog.lineEdit_password.text()
-            }
-            self.save_new_data()
-            self.edit_dialog.close()
-
-        def close():
-            self.edit_dialog.close()
-
-        self.ui_edit_dialog.pushButton_back.clicked.connect(lambda: close())
-        self.ui_edit_dialog.pushButton_save.clicked.connect(lambda: return_new_data(data[0]))
-        self.ui_edit_dialog.pushButton_delete.clicked.connect(lambda: self.del_user(data[0]))
-
-    def save_new_data(self):
-        self.cursor.execute(f"""
-            UPDATE users_list
-            SET full_name = '{self.new_data['full_name']}',
-                date_of_birth = '{self.new_data['date_of_birth']}',
-                logging = '{self.new_data['logging']}',
-                password = '{self.new_data['password']}'
-            WHERE id = {self.new_data['id']};
-        """)
-        self.connection.commit()
-
-        self.init_ui()
-
-    def del_user(self, id):
-        self.cursor.execute("DELETE FROM users_list WHERE id = ?", (id,))
-        self.connection.commit()
-
-        self.edit_dialog.close()
-
-        self.init_ui()
+        self.table.doubleClicked.connect(self.edit_selected_row)
 
     def update_table(self):
         self.model.clear()
-
         self.cursor.execute("SELECT * FROM users_list")
         rows = self.cursor.fetchall()
-        print(rows)
-
-        # Установка заголовков
         headers = ["ID", "ФИО", "Дата рождения", "Логин", "Пароль"]
         self.model.setHorizontalHeaderLabels(headers)
-
-        # Заполнение модели
         for row in rows:
             items = [QStandardItem(str(cell)) for cell in row]
             self.model.appendRow(items)
 
+    def edit_selected_row(self, index):
+        row = index.row()
+        data = [self.model.item(row, col).text() for col in range(self.model.columnCount())]
 
+        self.ui_edit_dialog.fill_areas(data)
+        self.edit_dialog.show()
 
-class CreateTask(QMainWindow):
-    def __init__(self):
-        super().__init__()
+        self.ui_edit_dialog.pushButton_back.clicked.connect(self.edit_dialog.close)
+        self.ui_edit_dialog.pushButton_save.clicked.connect(lambda: self.save_new_data(data[0]))
+        self.ui_edit_dialog.pushButton_delete.clicked.connect(lambda: self.del_user(data[0]))
+
+    def save_new_data(self, id):
+        self.cursor.execute(f"""
+            UPDATE users_list SET
+                full_name = ?,
+                date_of_birth = ?,
+                logging = ?,
+                password = ?
+            WHERE id = ?
+        """, (
+            self.ui_edit_dialog.lineEdit_full_name.text(),
+            self.ui_edit_dialog.lineEdit_date_of_birth.text(),
+            self.ui_edit_dialog.lineEdit_login.text(),
+            self.ui_edit_dialog.lineEdit_password.text(),
+            id
+        ))
+        self.connection.commit()
+        self.edit_dialog.close()
+        self.update_table()
+
+    def del_user(self, id):
+        self.cursor.execute("DELETE FROM users_list WHERE id = ?", (id,))
+        self.connection.commit()
+        self.edit_dialog.close()
+        self.update_table()
