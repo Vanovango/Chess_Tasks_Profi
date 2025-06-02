@@ -8,11 +8,14 @@ from user_main_page import Ui_UserMainPage
 from registration_page import Ui_RegistrationPage
 
 from verify_user import Verify
+import init
 
 
 class StartApp:
     # =========================== init main variables ===============================
     def __init__(self):
+        init.init_db()
+
         self.verify = Verify()
 
         self.logging_page = None
@@ -64,7 +67,7 @@ class StartApp:
         self.user_main_page.show()
         self.logging_page.close()
 
-    def open_registration_page(self):
+    def open_registration_page(self, from_root=False):
         self.registration_page = QtWidgets.QMainWindow()
         self.ui_registration_page = Ui_RegistrationPage()
         self.ui_registration_page.setupUi(self.registration_page)
@@ -72,22 +75,32 @@ class StartApp:
         self.logging_page.close()
         self.registration_page.show()
 
-        self.ui_registration_page.pushButton_back.clicked.connect(
-            lambda: (self.registration_page.close(), self.logging_page.show())
-        )
-        self.ui_registration_page.pushButton_registration.clicked.connect(
-            lambda: self.registration_new_user(
-                self.ui_registration_page.lineEdit_full_name.text(),
-                self.ui_registration_page.lineEdit_date_of_birth.text(),
-                self.ui_registration_page.lineEdit_logging.text(),
-                self.ui_registration_page.lineEdit_password.text()
-            ))
+        if not from_root:
+            self.ui_registration_page.pushButton_back.clicked.connect(
+                lambda: (self.registration_page.close(), self.logging_page.show())
+            )
+            self.ui_registration_page.pushButton_registration.clicked.connect(
+                lambda: self.registration_new_user(
+                    self.ui_registration_page.lineEdit_full_name.text(),
+                    self.ui_registration_page.lineEdit_date_of_birth.text(),
+                    self.ui_registration_page.lineEdit_logging.text(),
+                    self.ui_registration_page.lineEdit_password.text()
+                ))
+        else:
+            self.ui_registration_page.pushButton_back.clicked.connect(
+                lambda: self.registration_page.close()
+            )
+            self.ui_registration_page.pushButton_registration.clicked.connect(
+                lambda: self.registration_new_user(
+                    self.ui_registration_page.lineEdit_full_name.text(),
+                    self.ui_registration_page.lineEdit_date_of_birth.text(),
+                    self.ui_registration_page.lineEdit_logging.text(),
+                    self.ui_registration_page.lineEdit_password.text(),
+                    from_root
+                ))
 
     # ======================= logically functions ===========================
     def entering_into_system(self, logging, password):
-        # print(f"logging - {logging} \n"
-        #       f"password - {password}")
-
         if self.verify.check_user(logging, password) == 'admin_access':
             self.open_root_main()
         elif self.verify.check_user(logging, password):
@@ -95,12 +108,7 @@ class StartApp:
         else:
             print('Пользователь не найден')
 
-    def registration_new_user(self, full_name, date_of_birth, logging, password):
-        # print(f"full_name - {full_name} \n"
-        #       f"date_of_birth - {date_of_birth} \n"
-        #       f"logging - {logging} \n"
-        #       f"password - {password}\n")
-
+    def registration_new_user(self, full_name, date_of_birth, logging, password, from_root=False):
         user_data = {
             'full_name': full_name,
             'date_of_birth': date_of_birth,
@@ -110,7 +118,9 @@ class StartApp:
         self.verify.add_new_user(user_data)
 
         self.registration_page.close()
-        self.logging_page.show()
+
+        if not from_root:
+            self.logging_page.show()
 
     #=========================== run app ===============================
     def run(self):
@@ -120,6 +130,6 @@ class StartApp:
 
         sys.exit(app.exec_())
 
+
 if __name__ == "__main__":
     app = StartApp()
-

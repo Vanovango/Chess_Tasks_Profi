@@ -113,9 +113,9 @@ class Ui_ChangeData(object):
         self.lineEdit_password.setText(data[4])
 
     def return_new_data(self):
-        from root_main_page import UsersList
+        from root_main_page import UsersListTable
 
-        users_list = UsersList
+        users_list = UsersListTable
         users_list.new_data = {
             'full_name': self.lineEdit_full_name.text(),
             'date_of_birth': self.lineEdit_date_of_birth.text(),

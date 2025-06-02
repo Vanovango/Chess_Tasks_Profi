@@ -2,18 +2,8 @@ import sqlite3
 
 class Verify:
     def __init__(self):
-        self.connect = sqlite3.connect('./database.db')
+        self.connect = sqlite3.connect('database.db')
         self.cursor = self.connect.cursor()
-
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users_list (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                full_name TEXT NOT NULL,
-                date_of_birth TEXT NOT NULL,
-                logging TEXT NOT NULL,
-                password TEXT NOT NULL
-            );
-        """)
 
         self.users_list = {
             'full_name': [],

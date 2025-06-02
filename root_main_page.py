@@ -1,13 +1,16 @@
 import sqlite3
 import sys
 import json
+import ast
+
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTableView, QVBoxLayout,
     QMessageBox, QWidget, QAbstractItemView
 )
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtCore import Qt
+
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from new_task_settings import Ui_NewTaskSettings
 from change_data import Ui_ChangeData
@@ -26,6 +29,10 @@ class Ui_RootMainPage(QMainWindow):
 
         self.current_widget = None
         self.content_layout = None
+
+        self.table_title_font = QFont()
+        self.table_title_font.setPointSize(14)
+        self.table_title_font.setBold(True)
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -90,12 +97,12 @@ class Ui_RootMainPage(QMainWindow):
     def functions(self):
         self.action_tasks_list.triggered.connect(self.show_tasks_list)
         self.action_create_task.triggered.connect(self.crate_task)
-        self.action_import_task.triggered.connect(lambda: self.label_title.setText("import_task"))
-        self.action_export_task.triggered.connect(lambda: self.label_title.setText("export_task"))
+        self.action_import_task.triggered.connect(lambda: self.label_title.setText(""))
+        self.action_export_task.triggered.connect(lambda: self.label_title.setText(""))
 
         self.action_users_list.triggered.connect(self.show_users_list)
-        self.action_create_user.triggered.connect(lambda: self.label_title.setText("create_user"))
-        self.action_users_statistics.triggered.connect(lambda: self.label_title.setText("show_statistics"))
+        self.action_create_user.triggered.connect(lambda: self.app.open_registration_page(True))
+        self.action_users_statistics.triggered.connect(lambda: self.label_title.setText(""))
 
         self.action_logout.triggered.connect(self.logout)
         self.action_close_app.triggered.connect(self.close_app)
@@ -110,10 +117,12 @@ class Ui_RootMainPage(QMainWindow):
         self.content_layout.addWidget(widget)
 
     def show_tasks_list(self):
+        self.label_title.setText("Список всех задач")
+        self.label_title.setFont(self.table_title_font)
+
         table_widget = CreateTaskTable()
         table_widget.task_double_clicked.connect(self.edit_existing_task)
         self.set_content_widget(table_widget)
-
 
     def crate_task(self):
         self.new_task_settings.show()
@@ -134,20 +143,30 @@ class Ui_RootMainPage(QMainWindow):
     def edit_existing_task(self, task_id):
         conn = sqlite3.connect("database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT theme, name, complexity, walls FROM tasks WHERE id = ?", (task_id,))
+        cursor.execute("SELECT theme, name, complexity, walls, figures FROM tasks WHERE id = ?", (task_id,))
         row = cursor.fetchone()
         conn.close()
 
         if row:
-            theme, name, complexity, walls_json = row
+            theme, name, complexity, walls_json, figures_json = row
             loaded_walls = json.loads(walls_json)
-
-            # Передаем ID задачи в форму, чтобы она могла обновить её, а не создавать новую
+            loaded_figures = json.loads(figures_json)
+            # Преобразуем ключи фигур из строк в кортежи
+            fixed_figures = {}
+            for key, value in loaded_figures.items():
+                if isinstance(key, str):
+                    fixed_figures[tuple(ast.literal_eval(key))] = value
+                else:
+                    fixed_figures[key] = value
             task_form = CreateTaskForm(task_id, theme, name, complexity)
             task_form.walls = {tuple(w): True for w in loaded_walls}
+            task_form.figures = fixed_figures
             task_form.run()
 
     def show_users_list(self):
+        self.label_title.setText("Список пользователей")
+        self.label_title.setFont(self.table_title_font)
+
         table_widget = UsersListTable()
         self.set_content_widget(table_widget)
 
@@ -158,9 +177,6 @@ class Ui_RootMainPage(QMainWindow):
     @staticmethod
     def close_app():
         sys.exit()
-
-
-from PyQt5.QtCore import pyqtSignal
 
 
 class CreateTaskTable(QWidget):
