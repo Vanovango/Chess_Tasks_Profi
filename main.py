@@ -4,7 +4,7 @@ from PyQt5 import QtWidgets
 
 from loggin_page import Ui_LoggingPage
 from root_main_page import Ui_RootMainPage
-from user_main_page import Ui_UserMainPage
+from user_main_page import UserMainPage
 from registration_page import Ui_RegistrationPage
 
 from verify_user import Verify
@@ -15,6 +15,9 @@ class StartApp:
     # =========================== init main variables ===============================
     def __init__(self):
         init.init_db()
+
+        self.app = None
+        self.current_user_id = None
 
         self.verify = Verify()
 
@@ -61,8 +64,8 @@ class StartApp:
 
     def open_user_main(self):
         self.user_main_page = QtWidgets.QMainWindow()
-        self.ui_user_main_page = Ui_UserMainPage()
-        self.ui_user_main_page.setupUi(self.user_main_page)
+        self.ui_user_main_page = UserMainPage()
+        self.ui_user_main_page.setupUi(self.user_main_page, self.current_user_id)  # передаем user_id
 
         self.user_main_page.show()
         self.logging_page.close()
@@ -101,9 +104,11 @@ class StartApp:
 
     # ======================= logically functions ===========================
     def entering_into_system(self, logging, password):
-        if self.verify.check_user(logging, password) == 'admin_access':
+        user_id = self.verify.check_user(logging, password)
+        if user_id == 'admin_access':
             self.open_root_main()
-        elif self.verify.check_user(logging, password):
+        elif user_id:
+            self.current_user_id = user_id  # <-- сохраняем текущего пользователя
             self.open_user_main()
         else:
             print('Пользователь не найден')
@@ -124,11 +129,11 @@ class StartApp:
 
     #=========================== run app ===============================
     def run(self):
-        app = QtWidgets.QApplication(sys.argv)
+        self.app = QtWidgets.QApplication(sys.argv)
 
         self.open_logging_page()
 
-        sys.exit(app.exec_())
+        sys.exit(self.app.exec_())
 
 
 if __name__ == "__main__":

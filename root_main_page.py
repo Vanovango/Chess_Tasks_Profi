@@ -16,6 +16,8 @@ from new_task_settings import Ui_NewTaskSettings
 from change_data import Ui_ChangeData
 from create_task import CreateTaskForm
 
+from init import *
+
 
 class Ui_RootMainPage(QMainWindow):
     def __init__(self, app_reference=None):
@@ -141,7 +143,7 @@ class Ui_RootMainPage(QMainWindow):
         new_task_form.run()
 
     def edit_existing_task(self, task_id):
-        conn = sqlite3.connect("database.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT theme, name, complexity, walls, figures FROM tasks WHERE id = ?", (task_id,))
         row = cursor.fetchone()
@@ -186,7 +188,7 @@ class CreateTaskTable(QWidget):
         super().__init__()
         self.model = QStandardItemModel()
         self.table = QTableView()
-        self.connection = sqlite3.connect('database.db')
+        self.connection = sqlite3.connect(DB_PATH)
         self.cursor = self.connection.cursor()
 
         self.init_ui()
@@ -221,7 +223,7 @@ class UsersListTable(QWidget):
         super().__init__()
         self.model = QStandardItemModel()
         self.table = QTableView()
-        self.connection = sqlite3.connect('database.db')
+        self.connection = sqlite3.connect(DB_PATH)
         self.cursor = self.connection.cursor()
 
         self.edit_dialog = QtWidgets.QDialog()

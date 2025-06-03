@@ -1,15 +1,15 @@
 import pygame
 import json
-import sqlite3
 
+from init import *
 
 class CreateTaskForm:
     def __init__(self, task_id=None, theme=None, name=None, complexity=None, walls=None, figures=None):
         complexity_variants = {
-            'Легко': (110, 50, 6),
-            'Средне': (90, 50, 8),
-            'Сложно': (70, 50, 10),
-            'Невозможно': (45, 50, 16)
+            'Легко': (100, 50, 6),
+            'Средне': (80, 50, 8),
+            'Сложно': (60, 50, 10),
+            'Невозможно': (40, 50, 16)
         }
 
         self.task_id = task_id
@@ -22,7 +22,7 @@ class CreateTaskForm:
         self.CELL_SIZE, self.MARGIN, self.GRID_SIZE = complexity_variants[complexity]
         self.SCREEN_WIDTH = self.CELL_SIZE * self.GRID_SIZE + 2 * self.MARGIN
         self.SCREEN_HEIGHT = self.CELL_SIZE * self.GRID_SIZE + 2 * self.MARGIN + 200
-        self.DB_FILE = "database.db"
+        self.DB_FILE = DB_PATH
 
         pygame.init()
         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
@@ -36,7 +36,7 @@ class CreateTaskForm:
 
         self.FIGURE_LABELS = {
             1: "Залитый круг",
-            2: "Незалитый круг",
+            2: "Не залитый круг",
             3: "Стена",
             4: "Цифра",
             5: "Перекрестье",
@@ -95,10 +95,10 @@ class CreateTaskForm:
             r = int(self.CELL_SIZE * 0.33)
 
             if value == 1:  # залитый круг
-                pygame.draw.circle(self.screen, (0, 0, 255), (cx, cy), r)
+                pygame.draw.circle(self.screen, (0, 0, 0), (cx, cy), r)
 
-            elif value == 2:  # незалитый круг
-                pygame.draw.circle(self.screen, (0, 0, 255), (cx, cy), r, 3)
+            elif value == 2:  # не залитый круг
+                pygame.draw.circle(self.screen, (0, 0, 0), (cx, cy), r, 3)
 
             elif isinstance(value, int) and value >= 1000:  # цифра
                 number = value - 1000
@@ -108,11 +108,11 @@ class CreateTaskForm:
 
             elif value == 5:  # крест
                 offset = int(self.CELL_SIZE * 0.25)
-                pygame.draw.line(self.screen, (255, 0, 255), (cx - offset, cy), (cx + offset, cy), 3)
-                pygame.draw.line(self.screen, (255, 0, 255), (cx, cy - offset), (cx, cy + offset), 3)
+                pygame.draw.line(self.screen, (0, 128, 0), (cx - offset, cy), (cx + offset, cy), 3)
+                pygame.draw.line(self.screen, (0, 128, 0), (cx, cy - offset), (cx, cy + offset), 3)
 
             elif value == 6:  # заливка
-                pygame.draw.rect(self.screen, (0, 255, 0), (
+                pygame.draw.rect(self.screen, (0, 0, 0), (
                     self.MARGIN + x * self.CELL_SIZE + 2,
                     self.MARGIN + y * self.CELL_SIZE + 2,
                     self.CELL_SIZE - 4,
@@ -140,13 +140,13 @@ class CreateTaskForm:
         dx = x % self.CELL_SIZE
         dy = y % self.CELL_SIZE
         if dx < 10 and col > 0:
-            return (col, row, col, row + 1)
+            return col, row, col, row + 1
         if dx > self.CELL_SIZE - 10 and col < self.GRID_SIZE:
-            return (col + 1, row, col + 1, row + 1)
+            return col + 1, row, col + 1, row + 1
         if dy < 10 and row > 0:
-            return (col, row, col + 1, row)
+            return col, row, col + 1, row
         if dy > self.CELL_SIZE - 10 and row < self.GRID_SIZE:
-            return (col, row + 1, col + 1, row + 1)
+            return col, row + 1, col + 1, row + 1
         return None
 
     def draw_ui(self):

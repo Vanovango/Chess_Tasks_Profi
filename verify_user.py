@@ -1,8 +1,9 @@
 import sqlite3
+from init import *
 
 class Verify:
     def __init__(self):
-        self.connect = sqlite3.connect('database.db')
+        self.connect = sqlite3.connect(DB_PATH)
         self.cursor = self.connect.cursor()
 
         self.users_list = {
