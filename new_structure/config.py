@@ -14,7 +14,7 @@ def init_db():
             task_theme TEXT,
             name TEXT,
             complexity TEXT,
-            objects TEXT        
+            objects TEXT
         );
         
     """)
