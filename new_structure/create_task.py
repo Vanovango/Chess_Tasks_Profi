@@ -1,5 +1,10 @@
 import pygame
 import json
+import sqlite3
+import os
+
+# Define the database path relative to the script location
+DB_PATH = os.path.join(os.path.dirname(__file__), 'chess_tasks.db')
 
 class CreateTaskForm:
     def __init__(self, task_id=None, theme=None, name=None, complexity=None, walls=None, figures=None):
