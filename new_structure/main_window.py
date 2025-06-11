@@ -1,12 +1,16 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QPalette, QColor
 import sys
 import os
 import json
+import sqlite3
 
-from config import UI_COLORS, TASK_TYPES, COMPLEXITY_SETTINGS
+from config import (
+    UI_COLORS, TASK_TYPES, COMPLEXITY_SETTINGS,
+    db_connection
+)
 from task_generator import TaskGenerator
 from create_task import CreateTaskForm
 from task_browser import TaskBrowser
@@ -15,6 +19,8 @@ class Ui_MainWindow(object):
     def __init__(self, task_browser=None):
         self.task_browser = task_browser
         self.task_types = list(TASK_TYPES.keys())
+        self.create_task_form = None  # Single instance of create task form
+        self.task_generator = None    # Single instance of task generator
 
     def setupUi(self, MainWindow):
         """Setup the main window UI"""
@@ -211,144 +217,207 @@ class Ui_MainWindow(object):
     def update_task_themes(self, task_type: str):
         """Update available themes based on selected task type"""
         self.comboBox_task_theme.clear()
-        if task_type in TASK_TYPES:
-            self.comboBox_task_theme.addItems(TASK_TYPES[task_type])
+        
+        # Remove the dash and space prefix if present
+        clean_type = task_type.strip(' -')
+        
+        if clean_type in TASK_TYPES:
+            self.comboBox_task_theme.addItems(TASK_TYPES[clean_type])
         else:
             self.comboBox_task_theme.addItem("Выберите вид задачи")
+
+    def create_task_manually(self):
+        """Open task creation form"""
+        if not hasattr(self, 'create_task_form') or not self.create_task_form:
+            self.create_task_form = CreateTaskForm(parent=self.window())
+            self.create_task_form.taskCreated.connect(self.load_tasks)
+            self.create_task_form.finished.connect(self.on_create_task_form_closed)
+        self.create_task_form.show()
 
     def generate_task(self):
         """Generate a new task"""
         if not self.validate_inputs():
             return
 
-        try:
-            generator = TaskGenerator(
-                self.comboBox_task_type.currentText(),
-                self.comboBox_task_theme.currentText(),
-                self.comboBox_complexity.currentText()
+        task_type = self.comboBox_task_type.currentText().strip(' -')  # Remove dash and space
+        task_theme = self.comboBox_task_theme.currentText()
+        complexity = self.comboBox_complexity.currentText()
+
+        # Create or reuse the task generator
+        if not self.task_generator:
+            self.task_generator = TaskGenerator(
+                task_type=task_type,
+                task_theme=task_theme,
+                complexity=complexity
             )
-            
-            task = generator.generate_task()
-            if not task or not generator.validate_task(task):
-                self.show_error("Не удалось сгенерировать валидную задачу. Попробуйте еще раз.")
-                return
+            # Connect the closed signal to clear the reference
+            self.task_generator.destroyed.connect(self.on_task_generator_closed)
+        else:
+            # Update existing generator with new values
+            self.task_generator.task_type = task_type
+            self.task_generator.task_theme = task_theme
+            self.task_generator.complexity = complexity
+            self.task_generator.update_ui()
 
-            # Open task editor with generated task
-            self.open_task_editor(task)
-            
-        except Exception as e:
-            self.show_error(f"Ошибка при генерации задачи: {str(e)}")
+        self.task_generator.show()
+        self.task_generator.raise_()
+        self.task_generator.activateWindow()
 
-    def create_task_manually(self):
-        """Open task editor for manual creation"""
-        if not self.validate_inputs():
-            return
+    def on_create_task_form_closed(self):
+        """Handle create task form closure"""
+        self.create_task_form = None
 
-        task = {
-            'task_type': self.comboBox_task_type.currentText(),
-            'task_theme': self.comboBox_task_theme.currentText(),
-            'name': self.lineEdit_task_name.text(),
-            'complexity': self.comboBox_complexity.currentText(),
-            'walls': [],
-            'figures': {}
-        }
-        
-        self.open_task_editor(task)
-
-    def open_task_editor(self, task: dict):
-        """Open the task editor window"""
-        editor = CreateTaskForm(
-            task_id=task.get('task_id'),
-            task_type=task['task_type'],
-            task_theme=task['task_theme'],
-            name=task['name'],
-            complexity=task['complexity'],
-            walls=task.get('walls', []),
-            figures=task.get('figures', {})
-        )
-        editor.show()
+    def on_task_generator_closed(self):
+        """Handle task generator closure"""
+        self.task_generator = None
 
     def show_tasks_list(self):
-        """Show the task browser window (single instance)"""
-        if self.task_browser is not None:
+        """Show task browser window"""
+        if self.task_browser:
             self.task_browser.show()
             self.task_browser.raise_()
             self.task_browser.activateWindow()
             self.task_browser.load_tasks()
 
     def load_task(self):
-        """Load a task from file"""
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            None,
-            "Загрузить задачу",
-            os.path.expanduser("~/Desktop"),
-            "JSON Files (*.json);;All Files (*.*)"
-        )
-        
-        if file_path:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    task_data = json.load(f)
+        """Load task from database"""
+        task_type = self.comboBox_task_type.currentText()
+        task_theme = self.comboBox_task_theme.currentText()
+        task_name = self.lineEdit_task_name.text().strip()
+        complexity = self.comboBox_complexity.currentText()
+
+        if not all([task_type, task_theme, task_name, complexity]):
+            self.show_error("Заполните все поля для загрузки задачи")
+            return
+
+        try:
+            with db_connection() as (conn, cursor):
+                cursor.execute("""
+                    SELECT id, walls, figures, solution
+                    FROM tasks
+                    WHERE task_type = ? AND task_theme = ? 
+                    AND name = ? AND complexity = ?
+                """, (task_type, task_theme, task_name, complexity))
                 
-                # Validate task data
-                required_fields = ['task_type', 'task_theme', 'name', 'complexity']
-                if not all(field in task_data for field in required_fields):
-                    raise ValueError("Неверный формат файла задачи")
+                row = cursor.fetchone()
+                if not row:
+                    self.show_error("Задача не найдена")
+                    return
+                    
+                task_data = {
+                    'id': row[0],
+                    'walls': json.loads(row[1]) if row[1] else [],
+                    'figures': json.loads(row[2]) if row[2] else {},
+                    'solution': json.loads(row[3]) if row[3] else None
+                }
                 
-                # Open task editor with loaded task
-                self.open_task_editor(task_data)
+                return task_data
                 
-            except Exception as e:
-                self.show_error(f"Ошибка при загрузке задачи: {str(e)}")
+        except sqlite3.Error as e:
+            self.show_error(f"Ошибка при загрузке задачи: {str(e)}")
+        except json.JSONDecodeError as e:
+            self.show_error(f"Ошибка при разборе данных задачи: {str(e)}")
+        except Exception as e:
+            self.show_error(f"Неожиданная ошибка: {str(e)}")
+        return None
 
     def validate_inputs(self) -> bool:
-        """Validate all input fields"""
-        if self.comboBox_task_type.currentText() == "Выберите вид задачи":
+        """Validate form inputs"""
+        task_type = self.comboBox_task_type.currentText()
+        task_theme = self.comboBox_task_theme.currentText()
+        task_name = self.lineEdit_task_name.text().strip()
+        complexity = self.comboBox_complexity.currentText()
+
+        if task_type in ['Выберите вид задачи', '']:
             self.show_error("Выберите вид задачи")
             return False
-        if self.comboBox_task_theme.currentText() == "Выберите вид задачи":
+        if task_theme in ['Выберите вид задачи', '']:
             self.show_error("Выберите тему задачи")
             return False
-        if not self.lineEdit_task_name.text().strip():
+        if not task_name:
             self.show_error("Введите название задачи")
             return False
-        if self.comboBox_complexity.currentText() == "Выберите сложность":
+        if complexity in ['Выберите сложность', '']:
             self.show_error("Выберите сложность задачи")
             return False
         return True
 
     def show_error(self, message: str):
         """Show error message dialog"""
-        msg = QtWidgets.QMessageBox()
-        msg.setIcon(QtWidgets.QMessageBox.Warning)
-        msg.setWindowTitle("Ошибка")
-        msg.setText(message)
-        msg.setStyleSheet(f"""
-            QMessageBox {{
-                background-color: {UI_COLORS['background']};
-            }}
-            QMessageBox QLabel {{
-                color: {UI_COLORS['text']};
-            }}
-            QPushButton {{
-                background-color: {UI_COLORS['primary']};
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 5px 15px;
-            }}
-            QPushButton:hover {{
-                background-color: {UI_COLORS['accent']};
-            }}
-        """)
-        msg.exec_()
+        QMessageBox.critical(
+            None, "Ошибка", message,
+            QMessageBox.Ok
+        )
+
+class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setupUi(self)
+        self.create_task_form = None
+        self.task_generator = None
+        self.task_browser = None
+        self.init_ui()
+        self.load_tasks()
+
+    def init_ui(self):
+        """Initialize UI connections and setup"""
+        # Connect buttons
+        self.pushButton_exit.clicked.connect(self.close)
+        self.pushButton_show_tasks_list.clicked.connect(self.show_tasks_list)
+        self.pushButton_load_task.clicked.connect(self.load_task)
+        self.pushButton_create_by_yourself.clicked.connect(self.create_task_manually)
+        self.pushButton_generate_task.clicked.connect(self.generate_task)
+        
+        # Connect task type change
+        self.comboBox_task_type.currentTextChanged.connect(self.update_task_themes)
+        
+        # Initialize task browser
+        self.task_browser = TaskBrowser()
+        
+        # Set initial task themes
+        self.update_task_themes(self.comboBox_task_type.currentText())
+
+    def create_task_manually(self):
+        """Open task creation form"""
+        if not hasattr(self, 'create_task_form') or not self.create_task_form:
+            self.create_task_form = CreateTaskForm(parent=self.window())
+            self.create_task_form.taskCreated.connect(self.load_tasks)
+            self.create_task_form.finished.connect(self.on_create_task_form_closed)
+        self.create_task_form.show()
+
+    def load_tasks(self):
+        """Load tasks from database and update UI"""
+        try:
+            with db_connection() as (conn, cursor):
+                cursor.execute("""
+                    SELECT DISTINCT task_type 
+                    FROM tasks 
+                    ORDER BY task_type
+                """)
+                task_types = [row[0] for row in cursor.fetchall()]
+                
+                # Update task type combo box with all available types
+                current_type = self.comboBox_task_type.currentText()
+                self.comboBox_task_type.clear()
+                self.comboBox_task_type.addItem("Выберите вид задачи")
+                
+                # Add all task types from TASK_TYPES
+                for task_type in TASK_TYPES.keys():
+                    self.comboBox_task_type.addItem(task_type)
+                
+                # Restore previous selection if possible
+                index = self.comboBox_task_type.findText(current_type)
+                if index >= 0:
+                    self.comboBox_task_type.setCurrentIndex(index)
+                
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить задачи: {str(e)}")
 
 if __name__ == "__main__":
     import sys
 
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
+    ui = MainWindow()
     MainWindow.show()
     sys.exit(app.exec_())

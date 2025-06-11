@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- This is a python project that generates chess problems based on the "шах и гол.docx"
+- Task generation should be accurate, each task should have one solution or several, but in this case you need to warn about it.
+
+- When you write or add or fix code, make sure not to break what already works.

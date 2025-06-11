@@ -1,7 +1,10 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtGui import QPainter, QColor, QPen, QBrush, QFont
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 from PyQt5.QtCore import Qt, QSortFilterProxyModel
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import sqlite3
 import json
 import os
@@ -10,9 +13,99 @@ from datetime import datetime
 
 from config import (
     UI_COLORS, DB_PATH, TASK_TYPES, COMPLEXITY_SETTINGS,
-    get_export_path, EXPORT_DIR
+    get_export_path, EXPORT_DIR, db_connection, FIGURE_TYPES
 )
 from create_task import CreateTaskForm
+
+class PreviewDialog(QDialog):
+    def __init__(self, task_id, parent=None):
+        super().__init__(parent)
+        self.task_id = task_id
+        self.figures = {}
+        self.loadTaskData()
+        self.initUI()
+        
+    def loadTaskData(self):
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Load task info
+        cursor.execute('''
+            SELECT name, description, type, theme, grid_size 
+            FROM tasks WHERE id = ?
+        ''', (self.task_id,))
+        self.task_data = cursor.fetchone()
+        
+        # Load figures
+        cursor.execute('''
+            SELECT figure_type, x, y 
+            FROM task_figures 
+            WHERE task_id = ?
+        ''', (self.task_id,))
+        for figure_type, x, y in cursor.fetchall():
+            self.figures[(x, y)] = figure_type
+            
+        conn.close()
+        
+    def initUI(self):
+        self.setWindowTitle(f'Предпросмотр задачи: {self.task_data[0]}')
+        self.setMinimumSize(600, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Task info
+        info_layout = QVBoxLayout()
+        info_layout.addWidget(QLabel(f'Название: {self.task_data[0]}'))
+        info_layout.addWidget(QLabel(f'Тип: {self.task_data[2]}'))
+        info_layout.addWidget(QLabel(f'Тема: {self.task_data[3]}'))
+        info_layout.addWidget(QLabel('Описание:'))
+        desc_label = QLabel(self.task_data[1] if self.task_data[1] else '')
+        desc_label.setWordWrap(True)
+        info_layout.addWidget(desc_label)
+        
+        # Preview canvas
+        self.canvas = PreviewCanvas(self)
+        
+        layout.addLayout(info_layout)
+        layout.addWidget(self.canvas)
+        
+        self.setLayout(layout)
+
+class PreviewCanvas(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.setMinimumSize(400, 400)
+        self.setFrameStyle(QFrame.Box | QFrame.Plain)
+        
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        
+        # Calculate cell size
+        grid_size = self.parent.task_data[4]  # grid_size
+        cell_size = min(self.width(), self.height()) // grid_size
+        
+        # Draw grid
+        for i in range(grid_size + 1):
+            painter.drawLine(i * cell_size, 0, i * cell_size, grid_size * cell_size)
+            painter.drawLine(0, i * cell_size, grid_size * cell_size, i * cell_size)
+        
+        # Draw figures
+        for (x, y), figure_id in self.parent.figures.items():
+            figure = FIGURE_TYPES[figure_id]
+            rect_x = x * cell_size
+            rect_y = y * cell_size
+            
+            painter.fillRect(rect_x + 1, rect_y + 1, 
+                           cell_size - 2, cell_size - 2, 
+                           QColor(figure['color']))
+            
+            if 'border' in figure:
+                pen = QPen(QColor(figure['border']))
+                painter.setPen(pen)
+                painter.drawRect(rect_x + 1, rect_y + 1, 
+                               cell_size - 2, cell_size - 2)
 
 class TaskBrowser(QtWidgets.QMainWindow):
     def __init__(self):
@@ -100,7 +193,7 @@ class TaskBrowser(QtWidgets.QMainWindow):
         self.edit_button = self.create_action_button("Редактировать", UI_COLORS['primary'])
         self.delete_button = self.create_action_button("Удалить", UI_COLORS['accent'])
         self.export_button = self.create_action_button("Экспорт в CDR", UI_COLORS['secondary'])
-        self.preview_button = self.create_action_button("Предпросмотр", UI_COLORS['success'])
+        self.preview_button = self.create_action_button("Посмотреть", UI_COLORS['success'])
         
         button_layout.addWidget(self.edit_button)
         button_layout.addWidget(self.delete_button)
@@ -175,38 +268,48 @@ class TaskBrowser(QtWidgets.QMainWindow):
     def load_tasks(self):
         """Load tasks from database"""
         try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id, name, task_type, task_theme, complexity, 
-                       created_at, is_valid, has_unique_solution,
-                       export_path
-                FROM tasks
-                ORDER BY created_at DESC
-            """)
-            
-            self.model.removeRows(0, self.model.rowCount())
-            for row in cursor.fetchall():
-                items = [
-                    QStandardItem(str(row[0])),  # ID
-                    QStandardItem(row[1]),       # Name
-                    QStandardItem(row[2]),       # Type
-                    QStandardItem(row[3]),       # Theme
-                    QStandardItem(row[4]),       # Complexity
-                    QStandardItem(row[5]),       # Created at
-                    QStandardItem("✓" if row[6] else "✗"),  # Valid
-                    QStandardItem("✓" if row[7] else "✗"),  # Has solution
-                    QStandardItem("✓" if row[8] else "✗")   # Exported
-                ]
-                self.model.appendRow(items)
-            
-            # Update filter options
-            self.update_filter_options()
-            
+            with db_connection() as (conn, cursor):
+                cursor.execute("""
+                    SELECT id, name, task_type, task_theme, complexity, 
+                           created_at, is_valid, has_unique_solution,
+                           export_path
+                    FROM tasks
+                    ORDER BY created_at DESC
+                """)
+                
+                self.model.removeRows(0, self.model.rowCount())
+                for row in cursor.fetchall():
+                    items = [
+                        QStandardItem(str(row[0])),  # ID
+                        QStandardItem(row[1]),       # Name
+                        QStandardItem(row[2]),       # Type
+                        QStandardItem(row[3]),       # Theme
+                        QStandardItem(row[4]),       # Complexity
+                        QStandardItem(self.format_date(row[5])),  # Created at
+                        QStandardItem("✓" if row[6] else "✗"),  # Valid
+                        QStandardItem("✓" if row[7] else "✗"),  # Has solution
+                        QStandardItem("✓" if row[8] else "✗")   # Exported
+                    ]
+                    self.model.appendRow(items)
+                
+                # Update filter options
+                self.update_filter_options()
+                
         except sqlite3.Error as e:
             self.show_error(f"Ошибка при загрузке задач: {str(e)}")
-        finally:
-            conn.close()
+            return False
+        except Exception as e:
+            self.show_error(f"Неожиданная ошибка: {str(e)}")
+            return False
+        return True
+
+    def format_date(self, date_str: str) -> str:
+        """Format date string to a more readable format"""
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except:
+            return date_str
 
     def update_filter_options(self):
         """Update available filter options based on current tasks"""
@@ -284,34 +387,40 @@ class TaskBrowser(QtWidgets.QMainWindow):
     def get_task_data(self, task_id: int) -> Optional[Dict]:
         """Get task data from database"""
         try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT task_type, task_theme, name, complexity,
-                       grid_size, walls, figures, solution
-                FROM tasks
-                WHERE id = ?
-            """, (task_id,))
-            
-            row = cursor.fetchone()
-            if row:
+            with db_connection() as (conn, cursor):
+                cursor.execute("""
+                    SELECT task_type, task_theme, name, complexity,
+                           grid_size, walls, figures, solution,
+                           is_valid, has_unique_solution, export_path
+                    FROM tasks
+                    WHERE id = ?
+                """, (task_id,))
+                
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                    
                 return {
                     'task_type': row[0],
                     'task_theme': row[1],
                     'name': row[2],
                     'complexity': row[3],
                     'grid_size': row[4],
-                    'walls': json.loads(row[5]),
-                    'figures': json.loads(row[6]),
-                    'solution': json.loads(row[7]) if row[7] else None
+                    'walls': json.loads(row[5]) if row[5] else [],
+                    'figures': json.loads(row[6]) if row[6] else {},
+                    'solution': json.loads(row[7]) if row[7] else None,
+                    'is_valid': bool(row[8]),
+                    'has_unique_solution': bool(row[9]),
+                    'export_path': row[10]
                 }
-            return None
-            
-        except (sqlite3.Error, json.JSONDecodeError) as e:
+                
+        except sqlite3.Error as e:
             self.show_error(f"Ошибка при получении данных задачи: {str(e)}")
-            return None
-        finally:
-            conn.close()
+        except json.JSONDecodeError as e:
+            self.show_error(f"Ошибка при разборе данных задачи: {str(e)}")
+        except Exception as e:
+            self.show_error(f"Неожиданная ошибка: {str(e)}")
+        return None
 
     def edit_task(self):
         """Open task editor for the selected task"""
@@ -336,45 +445,45 @@ class TaskBrowser(QtWidgets.QMainWindow):
         self.create_task_form.show()
 
     def delete_task(self):
-        """Delete the selected task"""
+        """Delete selected task"""
         task_id = self.get_selected_task_id()
         if not task_id:
             self.show_error("Выберите задачу для удаления")
             return
             
         reply = QtWidgets.QMessageBox.question(
-            self, 'Подтверждение',
-            'Вы уверены, что хотите удалить эту задачу?',
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            QtWidgets.QMessageBox.No
+            self, "Подтверждение",
+            "Вы уверены, что хотите удалить эту задачу?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
         )
         
         if reply == QtWidgets.QMessageBox.Yes:
             try:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
+                # Get export path before deletion
+                task_data = self.get_task_data(task_id)
+                export_path = task_data.get('export_path') if task_data else None
                 
-                # Get export path before deleting
-                cursor.execute("SELECT export_path FROM tasks WHERE id = ?", (task_id,))
-                export_path = cursor.fetchone()[0]
+                # Delete from database
+                with db_connection() as (conn, cursor):
+                    cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
                 
-                # Delete task
-                cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-                conn.commit()
-                
-                # Delete exported file if exists
+                # Delete export file if exists
                 if export_path and os.path.exists(export_path):
-                    os.remove(export_path)
+                    try:
+                        os.remove(export_path)
+                    except OSError as e:
+                        self.show_error(f"Не удалось удалить файл экспорта: {str(e)}")
                 
+                # Refresh task list
                 self.load_tasks()
                 
             except sqlite3.Error as e:
                 self.show_error(f"Ошибка при удалении задачи: {str(e)}")
-            finally:
-                conn.close()
+            except Exception as e:
+                self.show_error(f"Неожиданная ошибка: {str(e)}")
 
     def export_task(self):
-        """Export the selected task to CDR format"""
+        """Export task to CDR format"""
         task_id = self.get_selected_task_id()
         if not task_id:
             self.show_error("Выберите задачу для экспорта")
@@ -385,34 +494,26 @@ class TaskBrowser(QtWidgets.QMainWindow):
             return
             
         try:
-            # Generate CDR file
             export_path = get_export_path(task_id)
             self.generate_cdr_file(task_data, export_path)
             
-            # Update database
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE tasks
-                SET export_path = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (export_path, task_id))
-            conn.commit()
+            # Update export path in database
+            with db_connection() as (conn, cursor):
+                cursor.execute(
+                    "UPDATE tasks SET export_path = ? WHERE id = ?",
+                    (export_path, task_id)
+                )
             
-            # Update UI
+            # Refresh task list
             self.load_tasks()
             
-            # Show success message
             QtWidgets.QMessageBox.information(
-                self, 'Успех',
-                f'Задача успешно экспортирована в файл:\n{export_path}'
+                self, "Успех",
+                f"Задача успешно экспортирована в:\n{export_path}"
             )
             
         except Exception as e:
             self.show_error(f"Ошибка при экспорте задачи: {str(e)}")
-        finally:
-            if 'conn' in locals():
-                conn.close()
 
     def generate_cdr_file(self, task_data: Dict, export_path: str):
         """Generate a CDR file for the task"""
@@ -447,44 +548,12 @@ class TaskBrowser(QtWidgets.QMainWindow):
             return
             
         # Create preview window
-        preview = QtWidgets.QDialog(self)
-        preview.setWindowTitle(f"Предпросмотр: {task_data['name']}")
-        preview.resize(800, 600)
-        
-        layout = QtWidgets.QVBoxLayout(preview)
-        
-        # Add task information
-        info = QtWidgets.QLabel(
-            f"Тип: {task_data['task_type']}\n"
-            f"Тема: {task_data['task_theme']}\n"
-            f"Сложность: {task_data['complexity']}\n"
-            f"Размер сетки: {task_data['grid_size']}x{task_data['grid_size']}"
-        )
-        layout.addWidget(info)
-        
-        # Add preview widget (placeholder)
-        preview_widget = QtWidgets.QLabel("Здесь будет предпросмотр задачи")
-        preview_widget.setStyleSheet(f"""
-            QLabel {{
-                background-color: {UI_COLORS['background']};
-                border: 2px solid {UI_COLORS['primary']};
-                border-radius: 5px;
-                padding: 20px;
-            }}
-        """)
-        layout.addWidget(preview_widget)
-        
-        # Add close button
-        close_button = QtWidgets.QPushButton("Закрыть")
-        close_button.clicked.connect(preview.close)
-        layout.addWidget(close_button)
-        
+        preview = PreviewDialog(task_id, self)
         preview.exec_()
 
     def show_error(self, message: str):
         """Show error message dialog"""
         QtWidgets.QMessageBox.critical(
-            self, 'Ошибка',
-            message,
+            self, "Ошибка", message,
             QtWidgets.QMessageBox.Ok
         ) 

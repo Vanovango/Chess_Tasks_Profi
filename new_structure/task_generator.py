@@ -4,10 +4,10 @@ from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
 import random
 import json
 import sqlite3
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 from config import (
     COMPLEXITY_SETTINGS, TASK_TYPES, UI_COLORS, DB_PATH,
-    VALIDATION_SETTINGS, FIGURE_TYPES
+    VALIDATION_SETTINGS, FIGURE_TYPES, db_connection
 )
 
 class TaskGenerator(QtWidgets.QMainWindow):
@@ -185,25 +185,23 @@ class TaskGenerator(QtWidgets.QMainWindow):
                 'has_unique_solution': bool(self.solution)
             }
             
-            # Save to database
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO tasks (
-                    task_type, task_theme, name, complexity,
-                    grid_size, walls, figures, solution,
-                    is_valid, has_unique_solution
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                task_data['task_type'], task_data['task_theme'],
-                task_data['name'], task_data['complexity'],
-                task_data['grid_size'], task_data['walls'],
-                task_data['figures'], task_data['solution'],
-                task_data['is_valid'], task_data['has_unique_solution']
-            ))
-            
-            conn.commit()
-            task_id = cursor.lastrowid
+            # Save to database using context manager
+            with db_connection() as (conn, cursor):
+                cursor.execute("""
+                    INSERT INTO tasks (
+                        task_type, task_theme, name, complexity,
+                        grid_size, walls, figures, solution,
+                        is_valid, has_unique_solution
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    task_data['task_type'], task_data['task_theme'],
+                    task_data['name'], task_data['complexity'],
+                    task_data['grid_size'], task_data['walls'],
+                    task_data['figures'], task_data['solution'],
+                    task_data['is_valid'], task_data['has_unique_solution']
+                ))
+                
+                task_id = cursor.lastrowid
             
             QtWidgets.QMessageBox.information(
                 self, "Успех",
@@ -218,23 +216,252 @@ class TaskGenerator(QtWidgets.QMainWindow):
                 self, "Ошибка",
                 f"Не удалось сохранить задачу: {str(e)}"
             )
-        finally:
-            conn.close()
 
     def validate_task(self) -> bool:
         """Validate the generated task"""
-        # TODO: Implement proper validation
+        if not self.walls or not self.figures:
+            return False
+
+        # Check wall density
+        total_cells = self.GRID_SIZE * self.GRID_SIZE
+        wall_density = len(self.walls) / total_cells
+        if not (VALIDATION_SETTINGS['min_wall_density'] <= wall_density <= VALIDATION_SETTINGS['max_wall_density']):
+            return False
+
+        # Check if there are required figures based on task type
+        if self.task_type == "Замкнутые":
+            if not any(fig_type in [1, 2] for fig_type in self.figures.values()):
+                return False
+        else:  # Незамкнутые
+            if not any(fig_type in [4, 5] for fig_type in self.figures.values()):
+                return False
+
+        # Validate solution exists
+        if not self.find_solution():
+            return False
+
         return True
+
+    def find_solution(self) -> bool:
+        """Find a valid solution for the task"""
+        if self.task_type == "Замкнутые":
+            return self.find_closed_path_solution()
+        else:
+            return self.find_open_path_solution()
+
+    def find_closed_path_solution(self) -> bool:
+        """Find a valid closed path solution"""
+        points = [pos for pos, fig_type in self.figures.items() if fig_type in [1, 2]]
+        if not points:
+            return False
+
+        # Try to find a valid cycle through all points
+        visited = set()
+        path = []
+        
+        def is_valid_move(x: int, y: int) -> bool:
+            return (0 <= x < self.GRID_SIZE and 
+                   0 <= y < self.GRID_SIZE and 
+                   f"{x},{y}" not in self.walls)
+
+        def can_reach_next_point(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+            queue = [(start, [start])]
+            seen = {start}
+            
+            while queue:
+                (x, y), path = queue.pop(0)
+                if (x, y) == end:
+                    return path
+                
+                # Try rook moves
+                for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                    new_x, new_y = x + dx, y + dy
+                    if (is_valid_move(new_x, new_y) and 
+                        (new_x, new_y) not in seen):
+                        seen.add((new_x, new_y))
+                        queue.append(((new_x, new_y), path + [(new_x, new_y)]))
+            return []
+
+        # Try to connect all points
+        current = tuple(map(int, points[0].split(",")))
+        visited.add(points[0])
+        path = [current]
+        
+        while len(visited) < len(points):
+            next_point = None
+            next_path = None
+            
+            # Find closest unvisited point
+            for point in points:
+                if point not in visited:
+                    target = tuple(map(int, point.split(",")))
+                    temp_path = can_reach_next_point(current, target)
+                    if temp_path:
+                        if not next_path or len(temp_path) < len(next_path):
+                            next_point = point
+                            next_path = temp_path
+            
+            if not next_path:
+                return False
+                
+            visited.add(next_point)
+            path.extend(next_path[1:])
+            current = tuple(map(int, next_point.split(",")))
+
+        # Check if we can close the path
+        final_path = can_reach_next_point(current, tuple(map(int, points[0].split(","))))
+        if not final_path:
+            return False
+
+        path.extend(final_path[1:])
+        self.solution = path
+        return True
+
+    def find_open_path_solution(self) -> bool:
+        """Find a valid open path solution"""
+        start = None
+        end = None
+        for pos, fig_type in self.figures.items():
+            if fig_type == 4:  # Start
+                start = tuple(map(int, pos.split(",")))
+            elif fig_type == 5:  # End
+                end = tuple(map(int, pos.split(",")))
+
+        if not start or not end:
+            return False
+
+        def is_valid_move(x: int, y: int) -> bool:
+            return (0 <= x < self.GRID_SIZE and 
+                   0 <= y < self.GRID_SIZE and 
+                   f"{x},{y}" not in self.walls)
+
+        # BFS to find path
+        queue = [(start, [start])]
+        seen = {start}
+        
+        while queue:
+            (x, y), path = queue.pop(0)
+            if (x, y) == end:
+                self.solution = path
+                return True
+            
+            # Try rook moves
+            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+                new_x, new_y = x + dx, y + dy
+                if (is_valid_move(new_x, new_y) and 
+                    (new_x, new_y) not in seen):
+                    seen.add((new_x, new_y))
+                    queue.append(((new_x, new_y), path + [(new_x, new_y)]))
+        
+        return False
 
     def generate_closed_task(self):
         """Generate a closed path task"""
-        # TODO: Implement closed path generation
-        pass
+        self.walls = []
+        self.figures = {}
+        
+        # Add points based on complexity
+        num_points = {
+            'Легко': 3,
+            'Средне': 4,
+            'Сложно': 5,
+            'Невозможно': 6
+        }[self.complexity]
+        
+        # Place points
+        points_placed = 0
+        attempts = 0
+        while points_placed < num_points and attempts < 100:
+            x = random.randint(0, self.GRID_SIZE - 1)
+            y = random.randint(0, self.GRID_SIZE - 1)
+            pos = f"{x},{y}"
+            
+            if pos not in self.figures:
+                self.figures[pos] = random.choice([1, 2])  # Random point type
+                points_placed += 1
+            attempts += 1
+
+        # Add walls
+        wall_count = int(self.GRID_SIZE * self.GRID_SIZE * random.uniform(
+            VALIDATION_SETTINGS['min_wall_density'],
+            VALIDATION_SETTINGS['max_wall_density']
+        ))
+        
+        walls_placed = 0
+        attempts = 0
+        while walls_placed < wall_count and attempts < 100:
+            x = random.randint(0, self.GRID_SIZE - 1)
+            y = random.randint(0, self.GRID_SIZE - 1)
+            pos = f"{x},{y}"
+            
+            if pos not in self.walls and pos not in self.figures:
+                self.walls.append(pos)
+                walls_placed += 1
+            attempts += 1
 
     def generate_open_task(self):
         """Generate an open path task"""
-        # TODO: Implement open path generation
-        pass
+        self.walls = []
+        self.figures = {}
+        
+        # Place start point
+        x1 = random.randint(0, self.GRID_SIZE - 1)
+        y1 = random.randint(0, self.GRID_SIZE - 1)
+        self.figures[f"{x1},{y1}"] = 4  # Start
+        
+        # Place end point
+        while True:
+            x2 = random.randint(0, self.GRID_SIZE - 1)
+            y2 = random.randint(0, self.GRID_SIZE - 1)
+            if (x2, y2) != (x1, y1):
+                self.figures[f"{x2},{y2}"] = 5  # End
+                break
+        
+        # Add walls
+        wall_count = int(self.GRID_SIZE * self.GRID_SIZE * random.uniform(
+            VALIDATION_SETTINGS['min_wall_density'],
+            VALIDATION_SETTINGS['max_wall_density']
+        ))
+        
+        walls_placed = 0
+        attempts = 0
+        while walls_placed < wall_count and attempts < 100:
+            x = random.randint(0, self.GRID_SIZE - 1)
+            y = random.randint(0, self.GRID_SIZE - 1)
+            pos = f"{x},{y}"
+            
+            if pos not in self.walls and pos not in self.figures:
+                self.walls.append(pos)
+                walls_placed += 1
+            attempts += 1
+
+    def update_ui(self):
+        """Update UI with current values"""
+        # Update grid settings based on new complexity
+        settings = COMPLEXITY_SETTINGS[self.complexity]
+        self.CELL_SIZE = int(settings['cell_size'])
+        self.MARGIN = int(settings['margin'])
+        self.GRID_SIZE = int(settings['grid_size'])
+        
+        # Update window title
+        self.setWindowTitle("Генератор задач")
+        
+        # Update info label
+        if hasattr(self, 'info_label'):
+            self.info_label.setText(
+                f"<b>Тип:</b> {self.task_type}<br>"
+                f"<b>Тема:</b> {self.task_theme}<br>"
+                f"<b>Сложность:</b> {self.complexity}"
+            )
+        
+        # Reset task data
+        self.walls = []
+        self.figures = {}
+        self.solution = None
+        
+        # Force canvas redraw
+        if hasattr(self, 'canvas'):
+            self.canvas.update()
 
 class TaskCanvas(QtWidgets.QWidget):
     def __init__(self, parent=None):

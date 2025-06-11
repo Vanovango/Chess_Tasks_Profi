@@ -1,5 +1,7 @@
 import sqlite3
 import os
+from contextlib import contextmanager
+from typing import Generator, Tuple
 
 # Application paths
 BASE_DIR = os.path.dirname(__file__)
@@ -10,6 +12,22 @@ ASSETS_DIR = os.path.join(BASE_DIR, 'assets')
 # Create necessary directories
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
+
+# Task types and themes with their available figures
+TASK_THEME_FIGURES = {
+    'Цикл с пустыми и закрашенными точками': [1, 2],  # 1 - filled point, 2 - empty point
+    'Цикл с закрашенными точками': [1],  # 1 - filled point
+    'Замкнутый путь с перегородками': [1, 3],  # 1 - point, 3 - wall
+    'Путь ладьи 1-2-3 с перегородками': [3, 6],  # 3 - wall, 6 - rook
+    'Несколько замкнутых циклов': [1, 2],  # 1 - filled point, 2 - empty point
+    'Выход для ладьи': [4, 5, 6],  # 4 - start, 5 - end, 6 - rook
+    'Маршрут к базе для 2 ладей': [4, 6, 7],  # 4 - start, 6 - rook, 7 - base
+    'Проведи ладью в правильном порядке': [4, 5, 6],  # 4 - start, 5 - end, 6 - rook
+    'Путь ладьи по коридорам': [4, 5, 6],  # 4 - start, 5 - end, 6 - rook
+    'Маршрут через клетки': [4, 5, 6],  # 4 - start, 5 - end, 6 - rook
+    'Простой математический лабиринт': [4, 5, 6],  # 4 - start, 5 - end, 6 - rook
+    'Кольцевой маршрут максимальной длины': [4, 5, 6]  # 4 - start, 5 - end, 6 - rook
+}
 
 # Task types and themes
 TASK_TYPES = {
@@ -76,58 +94,110 @@ UI_COLORS = {
 
 # Figure types and their properties
 FIGURE_TYPES = {
-    1: {'name': 'Закрашенная точка', 'color': '#000000'},
-    2: {'name': 'Пустая точка', 'color': '#FFFFFF', 'border': '#000000'},
-    3: {'name': 'Перегородка', 'color': '#E74C3C'},
-    4: {'name': 'Старт', 'color': '#27AE60'},
-    5: {'name': 'Финиш', 'color': '#E74C3C'},
-    6: {'name': 'Ладья', 'color': '#2C3E50'},
-    7: {'name': 'База', 'color': '#3498DB'}
+    1: {  # Закрашенный круг
+        'name': 'Закрашенный круг',
+        'color': '#000000',
+        'type': 'filled_circle',
+        'symbol': '●',
+        'description': 'Закрашенная точка'
+    },
+    2: {  # Незакрашенный круг
+        'name': 'Незакрашенный круг',
+        'color': '#000000',
+        'type': 'circle',
+        'symbol': '○',
+        'description': 'Незакрашенная точка'
+    },
+    3: {  # Стена
+        'name': 'Стена',
+        'color': '#000000',
+        'type': 'wall',
+        'symbol': '─',
+        'description': 'Стена',
+        'orientation': 'horizontal'  # По умолчанию горизонтальная
+    },
+    4: {  # Старт
+        'name': 'Старт',
+        'color': '#000000',
+        'type': 'start',
+        'symbol': '1',
+        'description': 'Точка старта'
+    },
+    5: {  # Финиш
+        'name': 'Финиш',
+        'color': '#000000',
+        'type': 'end',
+        'symbol': '2',
+        'description': 'Точка финиша'
+    },
+    6: {  # Ладья
+        'name': 'Ладья',
+        'color': '#808080',
+        'type': 'rook',
+        'symbol': '■',
+        'description': 'Ладья'
+    },
+    7: {  # База
+        'name': 'База',
+        'color': '#3498DB',
+        'type': 'base',
+        'symbol': 'B',
+        'description': 'База для ладьи'
+    }
 }
 
-def init_db():
-    """Initialize the database with the required schema"""
-    connection = sqlite3.connect(DB_PATH)
-    cursor = connection.cursor()
+@contextmanager
+def db_connection() -> Generator[Tuple[sqlite3.Connection, sqlite3.Cursor], None, None]:
+    """Context manager for database connections to ensure proper cleanup"""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        yield conn, cursor
+    finally:
+        if conn:
+            try:
+                conn.commit()
+                conn.close()
+            except sqlite3.Error:
+                pass
 
-    # Create tasks table with all necessary fields
-    cursor.execute("""
+def init_db():
+    """Initialize the database with required tables"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Create tasks table if not exists
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_type TEXT NOT NULL,
-            task_theme TEXT NOT NULL,
             name TEXT NOT NULL,
-            complexity TEXT NOT NULL,
-            grid_size INTEGER NOT NULL,
-            walls TEXT,           -- JSON array of wall coordinates
-            figures TEXT,         -- JSON object of figure positions and types
-            solution TEXT,        -- JSON object containing the solution
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_valid BOOLEAN DEFAULT 1,
-            has_unique_solution BOOLEAN DEFAULT 0,
-            export_path TEXT,     -- Path to exported CDR file if exists
-            validation_notes TEXT -- Additional validation information
-        );
-    """)
-
-    # Create indexes for faster searching
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_tasks_search 
-        ON tasks(task_type, task_theme, complexity, name);
-    """)
+            description TEXT,
+            type TEXT NOT NULL,
+            theme TEXT NOT NULL,
+            grid_size INTEGER NOT NULL
+        )
+    ''')
     
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_tasks_validation 
-        ON tasks(is_valid, has_unique_solution);
-    """)
+    # Create task_figures table if not exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS task_figures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER,
+            figure_type INTEGER,
+            x INTEGER,
+            y INTEGER,
+            FOREIGN KEY(task_id) REFERENCES tasks(id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    return conn, cursor
 
-    connection.commit()
-    return connection, cursor
-
-def get_db_connection():
-    """Get a database connection"""
-    return sqlite3.connect(DB_PATH)
+# Initialize directories
+os.makedirs(EXPORT_DIR, exist_ok=True)
+os.makedirs(ASSETS_DIR, exist_ok=True)
 
 def get_export_path(task_id: int) -> str:
     """Get the export path for a task"""
