@@ -435,6 +435,18 @@ class CreateTaskForm(QDialog):
         # Set window properties
         self.setMinimumSize(1000, 700)
 
+        # После создания self.canvas:
+        if self.walls is not None:
+            self.canvas.walls = list(self.walls)
+        if self.figures is not None:
+            # figures может быть как dict, так и list (если из базы)
+            if isinstance(self.figures, dict):
+                self.canvas.figures = {tuple(map(int, k.split(","))): v for k, v in self.figures.items()}
+            elif isinstance(self.figures, list):
+                # если список кортежей
+                self.canvas.figures = {tuple(f[:2]): f[2] for f in self.figures}
+        self.canvas.update()
+
     def onTaskTypeChanged(self, task_type: str):
         """Update available themes and figures based on task type"""
         self.theme_combo.clear()

@@ -179,6 +179,15 @@ class TaskBrowser(QtWidgets.QMainWindow):
             "Дата создания", "Статус", "Решение", "Экспорт"
         ])
         
+        # Сделать шрифт заголовков чёрным
+        header = self.task_list.horizontalHeader()
+        header_font = header.font()
+        header_font.setBold(True)
+        header_font.setPointSize(12)
+        header_font.setFamily('Arial')
+        header.setFont(header_font)
+        header.setStyleSheet("color: black;")
+        
         # Adjust column widths
         self.task_list.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
         for i in [0, 2, 3, 4, 5, 6, 7, 8]:
@@ -541,14 +550,20 @@ class TaskBrowser(QtWidgets.QMainWindow):
         if not task_id:
             self.show_error("Выберите задачу для предпросмотра")
             return
-            
         task_data = self.get_task_data(task_id)
         if not task_data:
             return
-            
-        # Create preview window
-        preview = PreviewDialog(task_id, self)
-        preview.exec_()
+        # Открываем CreateTaskForm для предпросмотра/редактирования
+        self.create_task_form = CreateTaskForm(
+            task_id=task_id,
+            task_type=task_data['task_type'],
+            task_theme=task_data['task_theme'],
+            name=task_data['name'],
+            complexity=task_data['complexity'],
+            walls=task_data['walls'],
+            figures=task_data['figures']
+        )
+        self.create_task_form.show()
 
     def show_error(self, message: str):
         """Show error message dialog"""
