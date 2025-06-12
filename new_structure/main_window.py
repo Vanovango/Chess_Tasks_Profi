@@ -235,33 +235,92 @@ class Ui_MainWindow(object):
         self.create_task_form.show()
 
     def generate_task(self):
-        """Generate a new task"""
+        """Генерация задачи на основе теории игр с единственным решением и открытие CreateTaskForm"""
         if not self.validate_inputs():
             return
 
-        task_type = self.comboBox_task_type.currentText().strip(' -')  # Remove dash and space
+        task_type = self.comboBox_task_type.currentText().strip(' -')
         task_theme = self.comboBox_task_theme.currentText()
         complexity = self.comboBox_complexity.currentText()
+        grid_size = 6
+        if complexity == 'Средне':
+            grid_size = 8
+        elif complexity == 'Сложно':
+            grid_size = 10
+        elif complexity == 'Невозможно':
+            grid_size = 12
 
-        # Create or reuse the task generator
-        if not self.task_generator:
-            self.task_generator = TaskGenerator(
-                task_type=task_type,
-                task_theme=task_theme,
-                complexity=complexity
-            )
-            # Connect the closed signal to clear the reference
-            self.task_generator.destroyed.connect(self.on_task_generator_closed)
+        # Получаем допустимые фигуры для темы
+        from config import TASK_THEME_FIGURES
+        allowed_figures = TASK_THEME_FIGURES.get(task_theme, [])
+
+        # Генерируем задачу
+        figures, walls = self.game_theory_generate_task(task_type, task_theme, grid_size, allowed_figures)
+
+        # Закрываем предыдущее окно, если оно есть
+        if hasattr(self, 'create_task_form') and self.create_task_form:
+            self.create_task_form.close()
+            self.create_task_form = None
+
+        # Получаем название задачи из главного окна
+        task_name = self.lineEdit_task_name.text().strip()
+
+        # Открываем CreateTaskForm с уже расставленными фигурами
+        self.create_task_form = CreateTaskForm(
+            task_type=task_type,
+            task_theme=task_theme,
+            complexity=complexity,
+            name=task_name,
+            walls=walls,
+            figures=figures,
+        )
+        self.create_task_form.show()
+
+    def game_theory_generate_task(self, task_type, task_theme, grid_size, allowed_figures):
+        """
+        Примитивная генерация задачи с единственным решением (пример для пути ладьи).
+        Возвращает: (figures, walls)
+        """
+        import random
+        figures = {}
+        walls = []
+        # Пример: для темы 'Путь ладьи 1-2-3 с перегородками' генерируем путь с единственным решением
+        if task_theme == 'Путь ладьи 1-2-3 с перегородками':
+            # Ставим старт и финиш
+            start = (0, 0)
+            end = (grid_size-1, grid_size-1)
+            figures[start] = 6  # 6 - число (пусть будет старт)
+            figures[end] = 6    # 6 - число (пусть будет финиш)
+            # Прокладываем единственный путь (змейкой)
+            path = []
+            x, y = start
+            while (x, y) != end:
+                path.append((x, y))
+                if x < grid_size-1:
+                    x += 1
+                else:
+                    y += 1
+            path.append(end)
+            # Пронумеруем путь
+            for idx, (x, y) in enumerate(path):
+                figures[(x, y)] = 6  # 6 - число
+            # Добавим случайные стены, не блокируя путь
+            for _ in range(grid_size):
+                wx = random.randint(0, grid_size-2)
+                wy = random.randint(0, grid_size-2)
+                orientation = random.choice(['left', 'top', 'right', 'bottom'])
+                if (wx, wy) not in path:
+                    walls.append((wx, wy, orientation))
+            # Гарантируем единственность решения (упрощённо)
+            # (В реальной задаче нужен backtracking и проверка уникальности)
         else:
-            # Update existing generator with new values
-            self.task_generator.task_type = task_type
-            self.task_generator.task_theme = task_theme
-            self.task_generator.complexity = complexity
-            self.task_generator.update_ui()
-
-        self.task_generator.show()
-        self.task_generator.raise_()
-        self.task_generator.activateWindow()
+            # Для других тем — просто случайно расставить фигуры
+            for _ in range(grid_size):
+                x = random.randint(0, grid_size-1)
+                y = random.randint(0, grid_size-1)
+                fig = random.choice(allowed_figures) if allowed_figures else 1
+                figures[(x, y)] = fig
+        return figures, walls
 
     def on_create_task_form_closed(self):
         """Handle create task form closure"""

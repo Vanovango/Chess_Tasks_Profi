@@ -441,7 +441,14 @@ class CreateTaskForm(QDialog):
         if self.figures is not None:
             # figures может быть как dict, так и list (если из базы)
             if isinstance(self.figures, dict):
-                self.canvas.figures = {tuple(map(int, k.split(","))): v for k, v in self.figures.items()}
+                def parse_key(k):
+                    if isinstance(k, tuple):
+                        return k
+                    elif isinstance(k, str):
+                        return tuple(map(int, k.split(",")))
+                    else:
+                        raise ValueError("Unknown key type in figures")
+                self.canvas.figures = {parse_key(k): v for k, v in self.figures.items()}
             elif isinstance(self.figures, list):
                 # если список кортежей
                 self.canvas.figures = {tuple(f[:2]): f[2] for f in self.figures}
