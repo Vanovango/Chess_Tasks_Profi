@@ -47,9 +47,12 @@ class TaskCanvas(QFrame):
         super().__init__(parent)
         self.parent = parent
         self.figures = {}
-        self.walls = []
         self.selected_cell = None
-        self.digit_counter = 1
+        self.number_positions = {}  # {(x, y): number} для отслеживания цифр на поле
+        self.available_numbers = set()  # Множество доступных цифр (удаленных)
+        self.next_number = 1  # Следующая цифра для добавления
+        self.walls = []  # Список стен в формате [(x1, y1, x2, y2, orientation), ...]
+        self.wall_click_count = 0  # Счетчик нажатий для определения ориентации стены
         self.setMouseTracking(True)
         self.setMinimumSize(400, 400)
         self.setStyleSheet(f"""
@@ -59,6 +62,11 @@ class TaskCanvas(QFrame):
                 border-radius: 5px;
             }}
         """)
+
+    def get_wall_orientation(self):
+        """Получаем ориентацию стены на основе счетчика нажатий"""
+        orientations = ['left', 'top', 'right', 'bottom']
+        return orientations[self.wall_click_count % 4]
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -93,14 +101,30 @@ class TaskCanvas(QFrame):
                 margin + self.parent.size_spin.value() * cell_size, margin + i * cell_size
             )
 
-        # Draw walls
+        # Рисуем стены
         painter.setPen(QPen(primary_color, 3))
         for wall in self.walls:
-            x1, y1, x2, y2 = wall
-            painter.drawLine(
-                margin + x1 * cell_size, margin + y1 * cell_size,
-                margin + x2 * cell_size, margin + y2 * cell_size
-            )
+            x1, y1, orientation = wall
+            if orientation == 'left':
+                painter.drawLine(
+                    margin + x1 * cell_size, margin + y1 * cell_size,
+                    margin + x1 * cell_size, margin + (y1 + 1) * cell_size
+                )
+            elif orientation == 'top':
+                painter.drawLine(
+                    margin + x1 * cell_size, margin + y1 * cell_size,
+                    margin + (x1 + 1) * cell_size, margin + y1 * cell_size
+                )
+            elif orientation == 'right':
+                painter.drawLine(
+                    margin + (x1 + 1) * cell_size, margin + y1 * cell_size,
+                    margin + (x1 + 1) * cell_size, margin + (y1 + 1) * cell_size
+                )
+            elif orientation == 'bottom':
+                painter.drawLine(
+                    margin + x1 * cell_size, margin + (y1 + 1) * cell_size,
+                    margin + (x1 + 1) * cell_size, margin + (y1 + 1) * cell_size
+                )
 
         # Draw figures
         for (x, y), figure_id in self.figures.items():
@@ -108,7 +132,7 @@ class TaskCanvas(QFrame):
                 figure = FIGURE_TYPES[figure_id]
                 if figure_id == 1:  # Empty circle
                     painter.setPen(QPen(secondary_color, 2))
-                    painter.setBrush(QBrush(UI_COLORS['background']))
+                    painter.setBrush(QBrush(QColor(UI_COLORS['primary'])))
                     painter.drawEllipse(
                         margin + x * cell_size + cell_size//4,
                         margin + y * cell_size + cell_size//4,
@@ -116,17 +140,19 @@ class TaskCanvas(QFrame):
                     )
                 elif figure_id == 2:  # Filled circle
                     painter.setPen(QPen(secondary_color, 2))
-                    painter.setBrush(QBrush(UI_COLORS['primary']))
+                    painter.setBrush(QBrush(QColor(UI_COLORS['background'])))
                     painter.drawEllipse(
                         margin + x * cell_size + cell_size//4,
                         margin + y * cell_size + cell_size//4,
                         cell_size//2, cell_size//2
                     )
-                elif figure_id == 3:  # Wall
-                    painter.setPen(QPen(primary_color, 3))
-                    painter.drawLine(
-                        margin + x * cell_size, margin + y * cell_size,
-                        margin + (x + 1) * cell_size, margin + (y + 1) * cell_size
+                elif figure_id == 8:  # Закрашенная клетка
+                    painter.setPen(QPen(primary_color, 2))
+                    painter.setBrush(QBrush(QColor(UI_COLORS['primary'])))
+                    painter.drawRect(
+                        margin + x * cell_size + cell_size//4,
+                        margin + y * cell_size + cell_size//4,
+                        cell_size//2, cell_size//2
                     )
                 elif figure_id == 4:  # Start point
                     painter.setFont(QFont('Arial', cell_size//3, QFont.Bold))
@@ -145,9 +171,26 @@ class TaskCanvas(QFrame):
                 elif figure_id == 6:  # Number
                     painter.setFont(QFont('Arial', cell_size//3, QFont.Bold))
                     painter.setPen(QPen(secondary_color, 2))
+                    number = self.number_positions.get((x, y), 1)
                     painter.drawText(
                         QRect(margin + x * cell_size, margin + y * cell_size, cell_size, cell_size),
-                        Qt.AlignCenter, str(self.digit_counter)
+                        Qt.AlignCenter, str(number)
+                    )
+                elif figure_id == 7:  # Cross
+                    painter.setPen(QPen(primary_color, 2))
+                    # Горизонтальная линия
+                    painter.drawLine(
+                        margin + x * cell_size + cell_size//4,
+                        margin + y * cell_size + cell_size//2,
+                        margin + (x + 1) * cell_size - cell_size//4,
+                        margin + y * cell_size + cell_size//2
+                    )
+                    # Вертикальная линия
+                    painter.drawLine(
+                        margin + x * cell_size + cell_size//2,
+                        margin + y * cell_size + cell_size//4,
+                        margin + x * cell_size + cell_size//2,
+                        margin + (y + 1) * cell_size - cell_size//4
                     )
 
         # Draw selected cell highlight
@@ -162,34 +205,84 @@ class TaskCanvas(QFrame):
             )
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            cell_size = min(
-                (self.width() - 40) // self.parent.size_spin.value(),
-                (self.height() - 40) // self.parent.size_spin.value()
-            )
-            margin = (self.width() - cell_size * self.parent.size_spin.value()) // 2
-            
-            x = (event.x() - margin) // cell_size
-            y = (event.y() - margin) // cell_size
-            
-            if 0 <= x < self.parent.size_spin.value() and 0 <= y < self.parent.size_spin.value():
+        cell_size = min(
+            (self.width() - 40) // self.parent.size_spin.value(),
+            (self.height() - 40) // self.parent.size_spin.value()
+        )
+        margin = (self.width() - cell_size * self.parent.size_spin.value()) // 2
+        
+        x = (event.x() - margin) // cell_size
+        y = (event.y() - margin) // cell_size
+        
+        if 0 <= x < self.parent.size_spin.value() and 0 <= y < self.parent.size_spin.value():
+            if event.button() == Qt.LeftButton:
                 self.selected_cell = (x, y)
                 
                 if self.parent.selected_figure:
-                    if self.parent.selected_figure in [4, 5, 6]:  # Start, End, Number
-                        # Remove existing figure of same type
-                        for pos, fig_id in list(self.figures.items()):
-                            if fig_id == self.parent.selected_figure:
-                                del self.figures[pos]
+                    if self.parent.selected_figure == 3:  # Стена
+                        orientation = self.get_wall_orientation()
+                        # Удаляем все существующие стены в этой клетке
+                        self.walls = [w for w in self.walls if not (w[0] == x and w[1] == y)]
                         
-                        # Add new figure
-                        self.figures[(x, y)] = self.parent.selected_figure
-                        if self.parent.selected_figure == 6:  # Number
-                            self.digit_counter += 1
+                        # Добавляем новую стену в зависимости от ориентации
+                        if orientation == 'left' and x > 0:  # Стена слева
+                            wall = (x, y, orientation)
+                            self.walls.append(wall)
+                        elif orientation == 'top' and y > 0:  # Стена сверху
+                            wall = (x, y, orientation)
+                            self.walls.append(wall)
+                        elif orientation == 'right' and x < self.parent.size_spin.value() - 1:  # Стена справа
+                            wall = (x, y, orientation)
+                            self.walls.append(wall)
+                        elif orientation == 'bottom' and y < self.parent.size_spin.value() - 1:  # Стена снизу
+                            wall = (x, y, orientation)
+                            self.walls.append(wall)
+                        
+                        self.wall_click_count += 1
+                    elif self.parent.selected_figure == 6:  # Number
+                        # Удаляем предыдущую цифру если есть
+                        if (x, y) in self.figures and self.figures[(x, y)] == 6:
+                            old_number = self.number_positions[(x, y)]
+                            self.available_numbers.add(old_number)
+                            del self.number_positions[(x, y)]
+                            del self.figures[(x, y)]
+                        
+                        # Добавляем новую цифру
+                        if self.available_numbers:
+                            # Берем минимальную доступную цифру
+                            number = min(self.available_numbers)
+                            self.available_numbers.remove(number)
+                        else:
+                            # Если нет доступных цифр, берем следующую
+                            number = self.next_number
+                            self.next_number += 1
+                        
+                        self.figures[(x, y)] = 6
+                        self.number_positions[(x, y)] = number
+                    elif self.parent.selected_figure == 7:  # Cross
+                        # Просто добавляем/заменяем крест
+                        self.figures[(x, y)] = 7
+                    elif self.parent.selected_figure == 8:  # Закрашенная клетка
+                        # Добавляем/заменяем закрашенную клетку
+                        self.figures[(x, y)] = 8
                     else:  # Other figures
                         self.figures[(x, y)] = self.parent.selected_figure
-                
-                self.update()
+            elif event.button() == Qt.RightButton:
+                # Удаляем фигуру или стену по правой кнопке
+                if self.parent.selected_figure == 3:  # Стена
+                    # Проверяем все возможные ориентации для удаления
+                    for orientation in ['left', 'top', 'right', 'bottom']:
+                        wall = (x, y, orientation)
+                        if wall in self.walls:
+                            self.walls.remove(wall)
+                elif (x, y) in self.figures:
+                    if self.figures[(x, y)] == 6:  # Если удаляем цифру
+                        number = self.number_positions[(x, y)]
+                        self.available_numbers.add(number)  # Добавляем цифру в доступные
+                        del self.number_positions[(x, y)]
+                    del self.figures[(x, y)]
+            
+            self.update()
 
     def mouseMoveEvent(self, event):
         cell_size = min(
@@ -215,10 +308,16 @@ class TaskCanvas(QFrame):
 class CreateTaskForm(QDialog):
     taskCreated = QtCore.pyqtSignal()
 
-    def __init__(self, parent=None, name=None):
+    def __init__(self, parent=None, name=None, task_id=None, task_type=None, task_theme=None, complexity=None, walls=None, figures=None):
         super().__init__(parent)
         self.parent = parent
         self.name = name
+        self.task_id = task_id
+        self.task_type = task_type
+        self.task_theme = task_theme
+        self.complexity = complexity
+        self.walls = walls
+        self.figures = figures
         self.figures_on_board = {}
         self.selected_figure = None
         self.initUI()
@@ -282,21 +381,17 @@ class CreateTaskForm(QDialog):
         name_label = QLabel('Название задачи:')
         self.name_edit = QLineEdit()
         
-        # Task description
-        desc_label = QLabel('Описание задачи:')
-        self.desc_edit = QTextEdit()
-        self.desc_edit.setMaximumHeight(100)
-        
         # Grid size
         size_label = QLabel('Размер сетки:')
         self.size_spin = QSpinBox()
-        self.size_spin.setRange(3, 8)
-        self.size_spin.setValue(DEFAULT_GRID_SIZE)
+        self.size_spin.setRange(6, 12)
+        self.size_spin.setSingleStep(2)
+        self.size_spin.setValue(6)
         self.size_spin.valueChanged.connect(lambda: self.canvas.update())
         
         # Figures panel
         figures_label = QLabel('Доступные фигуры:')
-        self.figures_panel = QVBoxLayout()
+        self.figures_panel = QHBoxLayout()
         self.figures_panel.setSpacing(10)
         
         # Add widgets to left panel
@@ -306,12 +401,15 @@ class CreateTaskForm(QDialog):
         left_panel.addWidget(self.theme_combo)
         left_panel.addWidget(name_label)
         left_panel.addWidget(self.name_edit)
-        left_panel.addWidget(desc_label)
-        left_panel.addWidget(self.desc_edit)
         left_panel.addWidget(size_label)
         left_panel.addWidget(self.size_spin)
         left_panel.addWidget(figures_label)
-        left_panel.addLayout(self.figures_panel)
+        
+        # Создаем контейнер для панели фигур
+        figures_container = QWidget()
+        figures_container.setLayout(self.figures_panel)
+        left_panel.addWidget(figures_container)
+        
         left_panel.addStretch()
         
         # Save button
@@ -342,7 +440,10 @@ class CreateTaskForm(QDialog):
         self.theme_combo.clear()
         if task_type in TASK_TYPES:
             self.theme_combo.addItems(TASK_TYPES[task_type])
-        self.update_figure_buttons(task_type)
+            # Автоматически выбираем первую тему
+            if self.theme_combo.count() > 0:
+                self.theme_combo.setCurrentIndex(0)
+                self.update_figure_buttons(task_type, self.theme_combo.currentText())
 
     def onTaskThemeChanged(self, theme: str):
         """Update available figures based on task theme"""
@@ -369,13 +470,18 @@ class CreateTaskForm(QDialog):
             elif theme == "Цикл с закрашенными точками":
                 self.add_figure_button(1, FIGURE_TYPES[1])
             elif theme == "Замкнутый путь с перегородками":
-                self.add_figure_button(3, FIGURE_TYPES[3])
+                self.add_figure_button(3, FIGURE_TYPES[3])  # Только стена
             elif theme == "Путь ладьи 1-2-3 с перегородками":
-                self.add_figure_button(4, FIGURE_TYPES[4])
-                self.add_figure_button(5, FIGURE_TYPES[5])
-                self.add_figure_button(3, FIGURE_TYPES[3])
+                self.add_figure_button(6, FIGURE_TYPES[6])  # Цифра
+                self.add_figure_button(7, FIGURE_TYPES[7])  # Крест
             elif theme == "Несколько замкнутых циклов":
-                self.add_figure_button(6, FIGURE_TYPES[6])
+                self.add_figure_button(8, FIGURE_TYPES[8])  # Закрашенная клетка
+
+        # Автоматически выбираем первую кнопку
+        if self.figure_group.buttons():
+            first_button = self.figure_group.buttons()[0]
+            first_button.setChecked(True)
+            self.selected_figure = first_button.figure_id
 
     def add_figure_button(self, figure_id: int, figure_info: dict):
         """Add a figure button to the panel"""
@@ -407,23 +513,60 @@ class CreateTaskForm(QDialog):
             QMessageBox.warning(self, "Ошибка", "Введите название задачи")
             return
 
+        # Определяем сложность по числу клеток
+        size = self.size_spin.value()
+        if size == 6:
+            complexity = 'Легко'
+        elif size == 8:
+            complexity = 'Средне'
+        elif size == 10:
+            complexity = 'Сложно'
+        elif size == 12:
+            complexity = 'Невозможно'
+        else:
+            complexity = 'Легко'
+
         try:
+            # Преобразуем кортежи в строки для JSON
+            figures_json = {f"{x},{y}": fig_id for (x, y), fig_id in self.canvas.figures.items()}
+            walls_json = [f"{x},{y},{orientation}" for x, y, orientation in self.canvas.walls]
+            
             with db_connection() as (conn, cursor):
                 cursor.execute("""
                     INSERT INTO tasks (
-                        task_type, task_theme, name, description,
+                        task_type, task_theme, name, complexity,
                         grid_size, walls, figures
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     self.type_combo.currentText(),
                     self.theme_combo.currentText(),
                     self.name_edit.text().strip(),
-                    self.desc_edit.toPlainText().strip(),
+                    complexity,
                     self.size_spin.value(),
-                    json.dumps([]),  # walls
-                    json.dumps(self.canvas.figures)  # figures
+                    json.dumps(walls_json),
+                    json.dumps(figures_json)
                 ))
+                
+                QMessageBox.information(self, "Успех", "Задача успешно сохранена")
                 self.taskCreated.emit()
                 self.accept()
+
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить задачу: {str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Произошла непредвиденная ошибка: {str(e)}")
+
+    def closeEvent(self, event):
+        """Обработка закрытия окна"""
+        if self.canvas.figures or self.canvas.walls:
+            reply = QMessageBox.question(
+                self,
+                "Подтверждение",
+                "Вы уверены, что хотите закрыть окно? Все несохраненные изменения будут потеряны.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                event.ignore()
+                return
+        event.accept()

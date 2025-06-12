@@ -58,7 +58,6 @@ class PreviewDialog(QDialog):
         info_layout.addWidget(QLabel(f'Название: {self.task_data[0]}'))
         info_layout.addWidget(QLabel(f'Тип: {self.task_data[2]}'))
         info_layout.addWidget(QLabel(f'Тема: {self.task_data[3]}'))
-        info_layout.addWidget(QLabel('Описание:'))
         desc_label = QLabel(self.task_data[1] if self.task_data[1] else '')
         desc_label.setWordWrap(True)
         info_layout.addWidget(desc_label)
